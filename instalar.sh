@@ -74,29 +74,59 @@ MEM_MB=$(awk '/MemTotal/ {print int($2/1024)}' /proc/meminfo)
 # falham com mensagens confusas ("signature failed", "No space left on device").
 ESPACO_MIN_GB="${ESPACO_MIN_GB:-6}"
 livre_gb() { df -BG --output=avail / | tail -1 | tr -dc '0-9'; }
+gb() { lsblk -bdno SIZE "$1" 2>/dev/null | awk '{printf "%.1f", $1/1073741824}'; }
+
+# Aumentar o disco no VirtualBox não aumenta o "/": o espaço novo fica sobrando no fim do disco.
+# Esta função estica, em ordem, cada camada até o "/" usar o disco inteiro:
+#   partição (growpart) -> [LVM: volume físico (pvresize) -> volume lógico (lvextend)] -> sistema de arquivos
+amplia_raiz() {
+  local raiz part vg="" disco num
+  raiz=$(findmnt -n -o SOURCE /)
+  if command -v lvs &>/dev/null && lvs "$raiz" &>/dev/null; then
+    vg=$(lvs --noheadings -o vg_name "$raiz" | tr -d ' ')
+    part=$(pvs --noheadings -o pv_name --select "vg_name=$vg" | head -1 | tr -d ' ')
+  else
+    part="$raiz"                                    # "/" direto numa partição, sem LVM
+  fi
+  part=$(readlink -f "$part")
+  disco=$(lsblk -no PKNAME "$part" | head -1)
+  num=$(cat "/sys/class/block/$(basename "$part")/partition" 2>/dev/null || true)
+  echo "  / está em $raiz (partição $part, disco /dev/$disco de $(gb "/dev/$disco") GB${vg:+, LVM $vg})"
+
+  if [[ -n "$disco" && -n "$num" ]]; then
+    command -v growpart &>/dev/null || apt-get install -y cloud-guest-utils || true
+    if command -v growpart &>/dev/null; then
+      if growpart "/dev/$disco" "$num"; then echo "  partição $part ampliada"; else echo "  partição já ocupa o disco todo"; fi
+    else
+      amarelo "  sem o comando growpart: a partição não foi ampliada"
+    fi
+  fi
+
+  if [[ -n "$vg" ]]; then
+    pvresize "$part" || true
+    if (( $(vgs --noheadings -o vg_free_count "$vg" | tr -d ' ') > 0 )); then
+      lvextend -r -l +100%FREE "$raiz"
+    fi
+  else
+    case "$(findmnt -n -o FSTYPE /)" in
+      ext2|ext3|ext4) resize2fs "$raiz" || true ;;
+      xfs) xfs_growfs / || true ;;
+    esac
+  fi
+}
+
 if (( $(livre_gb) < ESPACO_MIN_GB )); then
   amarelo "Pouco espaço em / ($(livre_gb) GB livres). Tentando liberar e usar o disco inteiro..."
   apt-get clean || true
-  RAIZ=$(findmnt -n -o SOURCE /)
-  # O instalador do Ubuntu Server (LVM) costuma deixar parte do disco sem uso. Aqui ela é aproveitada:
-  #   1) a partição cresce até o fim do disco (se o disco da VM foi aumentado)
-  #   2) o volume físico (PV) e o volume lógico de / (LV) crescem junto, com o sistema de arquivos
-  if command -v lvs &>/dev/null && lvs "$RAIZ" &>/dev/null; then
-    VG=$(lvs --noheadings -o vg_name "$RAIZ" | tr -d ' ')
-    PV=$(pvs --noheadings -o pv_name --select "vg_name=$VG" | head -1 | tr -d ' ')
-    DISCO_PAI=$(lsblk -no PKNAME "$PV" | head -1)
-    if [[ -n "$DISCO_PAI" && -r "/sys/class/block/$(basename "$PV")/partition" ]] && command -v growpart &>/dev/null; then
-      growpart "/dev/$DISCO_PAI" "$(cat "/sys/class/block/$(basename "$PV")/partition")" && pvresize "$PV" || true
-    fi
-    EXTENTS_LIVRES=$(vgs --noheadings -o vg_free_count "$VG" | tr -d ' ')
-    if (( EXTENTS_LIVRES > 0 )); then
-      lvextend -r -l +100%FREE "$RAIZ"
-      verde "Disco ampliado: agora há $(livre_gb) GB livres em /."
-    fi
+  amplia_raiz
+  verde "Agora há $(livre_gb) GB livres em /."
+  if (( $(livre_gb) < ESPACO_MIN_GB )); then
+    lsblk -o NAME,SIZE,TYPE,MOUNTPOINTS || true
+    erro "só há $(livre_gb) GB livres em / (precisa de ${ESPACO_MIN_GB} GB).
+  O disco da VM é pequeno demais (veja SIZE acima). Desligue a VM e, no PowerShell do Windows:
+    VBoxManage.exe modifymedium disk \"CAMINHO\\do\\disco.vdi\" --resize 25600
+  Ligue a VM e rode este instalador de novo: ele usa o espaço novo sozinho."
   fi
-  (( $(livre_gb) >= ESPACO_MIN_GB )) || erro "só há $(livre_gb) GB livres em / (precisa de ${ESPACO_MIN_GB} GB).
-  Desligue a VM e aumente o disco no VirtualBox (Arquivo > Ferramentas > Gerenciador de Mídia,
-  aumente para 25 GB ou mais). Ligue a VM e rode este instalador de novo: ele usa o espaço novo sozinho."
 fi
 
 # Senha do sa: variável, ou pergunta no terminal (funciona também com "curl | sudo bash")
