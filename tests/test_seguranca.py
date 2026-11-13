@@ -59,3 +59,17 @@ def test_limite_por_rota_no_login(client_anonimo):
     finally:
         limiter.enabled = False
         limiter.reset()
+
+
+def test_limite_por_usuario_logado_mesmo_ip(lucas, beatriz):
+    """Dois alunos atrás do mesmo IP (NAT da faculdade): o abuso de um não bloqueia o outro."""
+    limiter.enabled = True
+    limiter.reset()
+    try:
+        pedido = {"id_motivo": 5, "titulo": "Matrícula"}      # secretaria: 422 rápido, mas conta no limite
+        codigos = [lucas.post("/api/agendamentos", data=pedido).status_code for _ in range(11)]
+        assert codigos[:10] == [422] * 10 and codigos[10] == 429   # LIMITE_AGENDAMENTO = 10/minute
+        assert beatriz.post("/api/agendamentos", data=pedido).status_code == 422
+    finally:
+        limiter.enabled = False
+        limiter.reset()

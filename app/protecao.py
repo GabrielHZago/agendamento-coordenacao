@@ -16,9 +16,16 @@ from .config import LIMITE_REQUISICOES, UPLOAD_MAX_MB, MAX_ARQUIVOS
 
 
 def chave_do_cliente(request: Request) -> str:
-    """Quem conta como "um cliente" para o limite de requisições."""
-    # TODO(human): decidir a chave do limite (ver explicação na conversa)
-    return get_remote_address(request)
+    """Quem conta como "um cliente" para o limite de requisições.
+
+    Logado: conta por usuário. No Wi-Fi da faculdade centenas de alunos saem pelo mesmo IP (NAT),
+    e um aluno abusando não pode bloquear a turma toda.
+    Sem login (login, cadastro, telas públicas): conta por IP, que é o que segura força bruta.
+    """
+    usuario = request.session.get("user") if "session" in request.scope else None
+    if usuario:
+        return f"usuario:{usuario['perfil']}:{usuario['id']}"
+    return f"ip:{get_remote_address(request)}"
 
 
 limiter = Limiter(key_func=chave_do_cliente, default_limits=[LIMITE_REQUISICOES],
