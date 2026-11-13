@@ -5,53 +5,61 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Agenda da Coordenação</title>
 <meta name="description" content="Agendamento de atendimentos com a coordenação de curso">
-<meta name="theme-color" content="#16325c">
+<meta name="theme-color" content="#143a6b">
 <link rel="stylesheet" href="/vendor/bootstrap.min.css">
 <link rel="stylesheet" href="/vendor/bootstrap-icons.min.css">
 <link rel="stylesheet" href="/css/app.css">
 </head>
 <body class="d-flex flex-column min-vh-100">
-<a class="visually-hidden-focusable btn btn-primary position-absolute m-2 z-3" href="#conteudo">Pular para o conteúdo</a>
 
-<div id="faixa-demo" class="faixa-demo text-center small fw-semibold py-1" hidden>
-  <i class="bi bi-cone-striped me-1" aria-hidden="true"></i>Modo demonstração: dados fictícios, nada é gravado
+<!-- Barra de acessibilidade -->
+<div class="barra-acess small">
+  <div class="container d-flex flex-wrap align-items-center gap-3 py-1">
+    <a href="#conteudo" class="link-acess">Ir para o conteúdo</a>
+    <div class="ms-auto d-flex flex-wrap align-items-center gap-3">
+      <span class="d-none d-sm-inline text-body-secondary">Acessibilidade:</span>
+      <span role="group" aria-label="Tamanho da fonte" class="d-inline-flex gap-1">
+        <button type="button" class="btn-acess" data-fonte="14" aria-label="Diminuir fonte">A−</button>
+        <button type="button" class="btn-acess" data-fonte="16" aria-label="Fonte padrão">A</button>
+        <button type="button" class="btn-acess" data-fonte="19" aria-label="Aumentar fonte">A+</button>
+      </span>
+      <button type="button" class="btn-acess" id="btn-tema">Tema claro</button>
+      <button type="button" class="btn-acess" id="btn-ouvir" aria-pressed="false">Ouvir página</button>
+    </div>
+  </div>
 </div>
 
-<nav class="navbar navbar-expand-lg sticky-top border-bottom bg-body" aria-label="Navegação principal">
-  <div class="container">
-    <a class="navbar-brand d-flex align-items-center gap-2" href="#inicio">
-      <span class="marca-icone" aria-hidden="true"><i class="bi bi-calendar2-check"></i></span>
-      <span class="lh-1">Agenda da Coordenação<small class="d-block text-body-secondary fw-normal mt-1">Anhanguera · Osasco</small></span>
+<div id="faixa-demo" class="faixa-demo small py-1" hidden>
+  <div class="container">Ambiente de demonstração: os dados são fictícios e nada é gravado.</div>
+</div>
+
+<!-- Cabeçalho -->
+<header class="cabecalho">
+  <div class="container d-flex align-items-center gap-3 py-3">
+    <a class="marca" href="#inicio">
+      <span class="marca-nome">Agenda da Coordenação</span>
+      <span class="marca-inst">Faculdade Anhanguera de Osasco</span>
     </a>
-    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#nav-principal"
-            aria-controls="nav-principal" aria-expanded="false" aria-label="Abrir menu" id="btn-menu" hidden>
-      <span class="navbar-toggler-icon"></span>
-    </button>
-    <div class="collapse navbar-collapse" id="nav-principal">
-      <ul class="navbar-nav me-auto mb-2 mb-lg-0" id="menu"></ul>
-      <div class="d-flex flex-wrap align-items-center gap-2 pb-2 pb-lg-0">
-        <div class="btn-group btn-group-sm" role="group" aria-label="Tamanho da fonte">
-          <button type="button" class="btn btn-outline-secondary" data-fonte="14" aria-label="Fonte menor">A−</button>
-          <button type="button" class="btn btn-outline-secondary" data-fonte="16" aria-label="Fonte normal">A</button>
-          <button type="button" class="btn btn-outline-secondary" data-fonte="19" aria-label="Fonte maior">A+</button>
-        </div>
-        <button type="button" class="btn btn-sm btn-outline-secondary" id="btn-ouvir" aria-pressed="false" title="Ouvir o conteúdo da tela">
-          <i class="bi bi-volume-up" aria-hidden="true"></i><span class="ms-1">Ouvir</span></button>
-        <button type="button" class="btn btn-sm btn-outline-secondary" id="btn-tema" aria-label="Alternar tema claro/escuro">
-          <i class="bi bi-sun" aria-hidden="true"></i></button>
-        <button type="button" class="btn btn-sm btn-outline-danger" id="btn-sair" hidden>
-          <i class="bi bi-box-arrow-right" aria-hidden="true"></i><span class="ms-1">Sair</span></button>
-      </div>
+    <div class="ms-auto d-flex align-items-center gap-3" id="usuario" hidden>
+      <div class="text-end lh-sm d-none d-sm-block"><div class="fw-semibold" id="usuario-nome"></div><div class="small opacity-75" id="usuario-perfil"></div></div>
+      <button type="button" class="btn btn-sm btn-outline-light" id="btn-sair">Sair</button>
     </div>
+  </div>
+</header>
+
+<!-- Menu do perfil -->
+<nav class="menu-principal border-bottom" aria-label="Menu principal" id="nav" hidden>
+  <div class="container">
+    <ul class="nav nav-underline flex-nowrap overflow-auto" id="menu"></ul>
   </div>
 </nav>
 
 <main id="conteudo" class="container py-4 flex-grow-1" tabindex="-1"></main>
 
-<footer class="border-top py-3 small text-body-secondary">
-  <div class="container d-flex flex-wrap justify-content-between gap-2">
+<footer class="rodape border-top small">
+  <div class="container d-flex flex-wrap justify-content-between gap-2 py-3">
     <span>Coordenação de curso · Faculdade Anhanguera de Osasco</span>
-    <span>Projeto acadêmico · equipe Tech Titans · 2026</span>
+    <span>Agenda da Coordenação 1.0 · Projeto acadêmico</span>
   </div>
 </footer>
 
@@ -59,7 +67,7 @@
 <div class="modal fade" id="modal" tabindex="-1" aria-labelledby="modal-titulo" aria-hidden="true">
   <div class="modal-dialog modal-dialog-centered"><div class="modal-content"></div></div>
 </div>
-<div class="toast-container position-fixed bottom-0 start-50 translate-middle-x p-3" id="toasts"></div>
+<div class="toast-container position-fixed bottom-0 end-0 p-3" id="toasts"></div>
 
 <script src="/vendor/bootstrap.bundle.min.js" defer></script>
 <script src="/vendor/imask.min.js" defer></script>
