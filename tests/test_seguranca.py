@@ -73,3 +73,16 @@ def test_limite_por_usuario_logado_mesmo_ip(lucas, beatriz):
     finally:
         limiter.enabled = False
         limiter.reset()
+
+
+def test_origem_de_outro_site_recusada(client_anonimo):
+    corpo = {"perfil": "aluno", "login": "1234567", "senha": "Aluno2026!"}
+    r = client_anonimo.post("/api/login", json=corpo, headers={"Origin": "http://evil.example"})
+    assert r.status_code == 403
+    r = client_anonimo.post("/api/login", json=corpo, headers={"Origin": "http://testserver"})
+    assert r.status_code == 200
+
+
+def test_busca_com_colchete(lucas):
+    # "[" é curinga no LIKE do SQL Server; aqui só garante que a busca não quebra
+    assert lucas.get("/api/agendamentos/meus?q=[a-z]").status_code == 200

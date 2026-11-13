@@ -14,6 +14,7 @@ else:
         pool_pre_ping=True,
         pool_size=10,
         max_overflow=20,
+        pool_timeout=5,          # sob carga, falha rápido em vez de enfileirar até travar
         fast_executemany=True,
     )
 

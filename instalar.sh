@@ -69,6 +69,36 @@ esac
 MEM_MB=$(awk '/MemTotal/ {print int($2/1024)}' /proc/meminfo)
 (( MEM_MB >= 1900 )) || erro "o SQL Server precisa de pelo menos 2 GB de RAM (a VM tem ${MEM_MB} MB); recomendado 4 GB"
 
+# ---------- Espaço em disco (antes de baixar qualquer coisa) ----------
+# O SQL Server, as atualizações e o Python ocupam ~4 GB. Sem espaço, o apt e o SQL Server
+# falham com mensagens confusas ("signature failed", "No space left on device").
+ESPACO_MIN_GB="${ESPACO_MIN_GB:-6}"
+livre_gb() { df -BG --output=avail / | tail -1 | tr -dc '0-9'; }
+if (( $(livre_gb) < ESPACO_MIN_GB )); then
+  amarelo "Pouco espaço em / ($(livre_gb) GB livres). Tentando liberar e usar o disco inteiro..."
+  apt-get clean || true
+  RAIZ=$(findmnt -n -o SOURCE /)
+  # O instalador do Ubuntu Server (LVM) costuma deixar parte do disco sem uso. Aqui ela é aproveitada:
+  #   1) a partição cresce até o fim do disco (se o disco da VM foi aumentado)
+  #   2) o volume físico (PV) e o volume lógico de / (LV) crescem junto, com o sistema de arquivos
+  if command -v lvs &>/dev/null && lvs "$RAIZ" &>/dev/null; then
+    VG=$(lvs --noheadings -o vg_name "$RAIZ" | tr -d ' ')
+    PV=$(pvs --noheadings -o pv_name --select "vg_name=$VG" | head -1 | tr -d ' ')
+    DISCO_PAI=$(lsblk -no PKNAME "$PV" | head -1)
+    if [[ -n "$DISCO_PAI" && -r "/sys/class/block/$(basename "$PV")/partition" ]] && command -v growpart &>/dev/null; then
+      growpart "/dev/$DISCO_PAI" "$(cat "/sys/class/block/$(basename "$PV")/partition")" && pvresize "$PV" || true
+    fi
+    EXTENTS_LIVRES=$(vgs --noheadings -o vg_free_count "$VG" | tr -d ' ')
+    if (( EXTENTS_LIVRES > 0 )); then
+      lvextend -r -l +100%FREE "$RAIZ"
+      verde "Disco ampliado: agora há $(livre_gb) GB livres em /."
+    fi
+  fi
+  (( $(livre_gb) >= ESPACO_MIN_GB )) || erro "só há $(livre_gb) GB livres em / (precisa de ${ESPACO_MIN_GB} GB).
+  Desligue a VM e aumente o disco no VirtualBox (Arquivo > Ferramentas > Gerenciador de Mídia,
+  aumente para 25 GB ou mais). Ligue a VM e rode este instalador de novo: ele usa o espaço novo sozinho."
+fi
+
 # Senha do sa: variável, ou pergunta no terminal (funciona também com "curl | sudo bash")
 if [[ -z "${SA_PASSWORD:-}" ]]; then
   [[ -r /dev/tty ]] || erro "sem terminal para perguntar a senha; passe SA_PASSWORD=... na linha de comando"
@@ -338,6 +368,27 @@ ufw limit 22/tcp
 ufw allow "${HTTP_PORT}/tcp"
 ufw delete allow "${APP_PORT}/tcp" &>/dev/null || true   # regra de instalações antigas
 ufw --force enable
+
+# fail2ban: bane por 10 min quem estoura o limite do nginx 20 vezes em 1 min,
+# e por 1 h quem erra a senha do SSH 5 vezes. Se falhar, a instalação segue (é uma camada extra).
+apt-get install "${APT_OPTS[@]}" fail2ban
+cat > /etc/fail2ban/jail.d/agendamento.local <<'EOF'
+[sshd]
+enabled  = true
+maxretry = 5
+findtime = 10m
+bantime  = 1h
+
+[nginx-limit-req]
+enabled  = true
+backend  = auto
+port     = http,https
+logpath  = /var/log/nginx/error.log
+maxretry = 20
+findtime = 1m
+bantime  = 10m
+EOF
+systemctl enable fail2ban && systemctl restart fail2ban || amarelo "fail2ban não subiu; o resto da proteção continua valendo."
 
 # ---------- 7. Conferência final ----------
 verde "[7/7] Conferindo se o sistema respondeu..."

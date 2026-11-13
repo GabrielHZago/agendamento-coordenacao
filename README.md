@@ -123,11 +123,33 @@ pytest                          # testes automatizados
 
 | Ameaça | Proteção |
 | --- | --- |
-| DDoS / excesso de acessos | nginx: 30 conexões e 20 req/s por IP, login 10/min, timeouts curtos (slowloris), corpo máx. 27 MB; uvicorn com `--limit-concurrency`; SYN cookies no kernel; Python: limite por rota (slowapi) |
-| SQL injection | só consultas pelo ORM (parametrizadas); `%` e `_` da busca tratados como texto; nomes do instalador validados |
-| XSS | CSP `script-src 'self'` (sem script inline nem CDN), todo texto escapado antes de ir para a tela |
+| DDoS / excesso de acessos | nginx: 30 conexões e 20 req/s por IP, login 10/min, timeouts curtos (slowloris), corpo máx. 27 MB; uvicorn com `--limit-concurrency`; SYN cookies no kernel; fail2ban bane por 10 min quem insiste no limite; Python: limite por rota (slowapi) e `pool_timeout` no banco |
+| SQL injection | só consultas pelo ORM (parametrizadas); `%`, `_` e `[` da busca tratados como texto; nomes do instalador validados |
+| XSS e CSRF | CSP `script-src 'self'` (sem script inline nem CDN), todo texto escapado antes de ir para a tela; cookie SameSite=strict e recusa de POST/PUT/PATCH/DELETE vindo de outro site |
 | Força bruta no login | bloqueio de 15 min após 5 erros, limite no nginx, resposta com o mesmo tempo para RA inexistente |
 | Upload malicioso | só PDF/PNG/JPG conferidos pelo conteúdo (magic bytes), até 5 MB e 5 arquivos, nome gerado pelo sistema, fora da pasta pública |
 | Invasão do processo | serviço isolado pelo systemd (`ProtectSystem=strict`, sem privilégios, só grava em `uploads/`); banco com usuário sem permissão de alterar tabelas |
 
-Ver os bloqueios do nginx: `sudo grep -c " 429 " /var/log/nginx/access.log`.
+**Limite da solução:** uma VM sozinha não segura um DDoS volumétrico (milhões de pacotes que lotam o link);
+isso se resolve antes do servidor, no firewall da faculdade ou numa CDN. O projeto reduz o risco do DDoS
+de aplicação: inundação de requisições, conexões lentas, força bruta e uploads gigantes.
+
+Próximos passos: HTTPS (certificado da faculdade ou Let's Encrypt, e `https_only=True` no cookie) e
+bloqueio de login guardado no banco em vez da memória de cada worker.
+
+### Como demonstrar na apresentação
+
+```bash
+# 1) Limite de requisições: as primeiras passam (200), depois vem 429
+for i in $(seq 1 80); do curl -s -o /dev/null -w "%{http_code} " http://IP-DA-VM/api/saude; done; echo
+
+# 2) Força bruta no login: depois de algumas tentativas, 429
+for i in $(seq 1 15); do curl -s -o /dev/null -w "%{http_code} " -H 'Content-Type: application/json'   -d '{"perfil":"aluno","login":"1234567","senha":"errada"}' http://IP-DA-VM/api/login; done; echo
+
+# 3) SQL injection no login: só 401, sem erro e sem entrar
+curl -s -H 'Content-Type: application/json' -d '{"perfil":"aluno","login":"x' OR '1'='1","senha":"x"}' http://IP-DA-VM/api/login; echo
+
+# 4) Na VM: quem foi banido e quantos pedidos o nginx barrou
+sudo fail2ban-client status nginx-limit-req
+sudo grep -c " 429 " /var/log/nginx/access.log
+```

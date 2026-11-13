@@ -7,6 +7,8 @@ Camadas contra abuso (da mais externa para a mais interna):
   4. esta camada    — limite por rota (slowapi), corpo máximo, cabeçalhos (CSP etc.)
   5. rotas          — validação Pydantic, ORM parametrizado, bloqueio de login após 5 falhas
 """
+from urllib.parse import urlsplit
+
 from fastapi import Request
 from fastapi.responses import JSONResponse
 from slowapi import Limiter
@@ -53,10 +55,24 @@ CABECALHOS = {
 SEM_CSP = ("/docs", "/redoc", "/openapi.json")
 
 
+METODOS_QUE_ALTERAM = {"POST", "PUT", "PATCH", "DELETE"}
+
+
+def origem_estrangeira(request: Request) -> bool:
+    """CSRF (2ª camada, além do cookie SameSite=strict): pedido que altera dados
+    só vale se vier de uma página deste mesmo site. Sem cabeçalho Origin (curl, testes) passa."""
+    origem = request.headers.get("origin")
+    if not origem or request.method not in METODOS_QUE_ALTERAM:
+        return False
+    return urlsplit(origem).netloc != request.headers.get("host", "")
+
+
 async def cabecalhos_e_tamanho(request: Request, call_next):
     tamanho = request.headers.get("content-length")
     if tamanho and tamanho.isdigit() and int(tamanho) > CORPO_MAX_BYTES:
         return JSONResponse({"detail": "Envio grande demais."}, status_code=413)
+    if origem_estrangeira(request):
+        return JSONResponse({"detail": "Origem não permitida."}, status_code=403)
 
     resposta = await call_next(request)
     for nome, valor in CABECALHOS.items():

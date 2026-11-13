@@ -134,7 +134,8 @@ def busca_texto(coluna_titulo, coluna_descricao, q: str | None):
     termo = q.strip()[:60]
     if not termo:
         return None
-    # % e _ digitados pelo usuário viram texto comum, não curinga do LIKE
-    termo = termo.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    # % e _ digitados pelo usuário viram texto comum, não curinga do LIKE.
+    # [ também: no SQL Server, "[a-z]" é curinga de intervalo (no SQLite não, por isso o teste não pega).
+    termo = termo.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_").replace("[", "\\[")
     padrao = f"%{termo}%"
     return or_(coluna_titulo.ilike(padrao, escape="\\"), coluna_descricao.ilike(padrao, escape="\\"))
