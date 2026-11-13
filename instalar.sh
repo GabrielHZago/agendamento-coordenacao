@@ -167,6 +167,9 @@ fi
 
 # ---------- 1. Sistema operacional ----------
 verde "[1/7] Atualizando o Ubuntu e instalando pacotes básicos..."
+# Termina instalações interrompidas (ex.: rodada anterior com o disco cheio)
+dpkg --configure -a || true
+apt-get install -f -y || true
 apt-get update -y
 apt-get upgrade "${APT_OPTS[@]}"
 apt-get install "${APT_OPTS[@]}" curl gnupg openssl ca-certificates git openssh-server ufw nginx \
@@ -185,10 +188,20 @@ curl -fsSL "https://packages.microsoft.com/config/ubuntu/${VERSION_ID}/prod.list
   -o /etc/apt/sources.list.d/mssql-release.list
 apt-get update -y
 apt-get install -y mssql-server
+# Pacote registrado como instalado, mas sem os arquivos (instalação interrompida): reinstala
+[[ -x /opt/mssql/bin/mssql-conf ]] || apt-get install --reinstall -y mssql-server
 
 if ! systemctl is-active --quiet mssql-server; then
-  MSSQL_SA_PASSWORD="$SA_PASSWORD" MSSQL_PID="Express" \
-    /opt/mssql/bin/mssql-conf -n setup accept-eula
+  # Configuração que nunca terminou (sem master.mdf = nenhum banco existe): limpa as sobras e refaz
+  if [[ ! -f /var/opt/mssql/data/master.mdf && -d /var/opt/mssql/.system ]]; then
+    amarelo "Limpando sobras de uma configuração do SQL Server que não terminou..."
+    rm -rf /var/opt/mssql/.system
+  fi
+  if ! MSSQL_SA_PASSWORD="$SA_PASSWORD" MSSQL_PID="Express" \
+       /opt/mssql/bin/mssql-conf -n setup accept-eula; then
+    tail -n 25 /var/opt/mssql/log/errorlog 2>/dev/null || true
+    erro "a configuração do SQL Server falhou (veja o log acima). Senha do sa fraca? Precisa de 8+ caracteres com maiúscula, minúscula, número e símbolo."
+  fi
   # Deixa ~40% da memória para o sistema operacional e o Python
   /opt/mssql/bin/mssql-conf set memory.memorylimitmb $(( MEM_MB * 6 / 10 )) || true
   systemctl restart mssql-server
@@ -197,6 +210,8 @@ systemctl enable --now mssql-server
 
 # ODBC Driver 18 (usado pelo Python) e sqlcmd
 ACCEPT_EULA=Y apt-get install -y msodbcsql18 mssql-tools18 unixodbc-dev
+[[ -x "$SQLCMD" ]] || ACCEPT_EULA=Y apt-get install --reinstall -y mssql-tools18
+odbcinst -q -d -n "ODBC Driver 18 for SQL Server" &>/dev/null || ACCEPT_EULA=Y apt-get install --reinstall -y msodbcsql18
 echo 'export PATH="$PATH:/opt/mssql-tools18/bin"' > /etc/profile.d/mssql.sh
 
 # sqlcmd como sa. -f 65001: o script SQL está em UTF-8 (acentos).
