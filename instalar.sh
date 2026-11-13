@@ -465,6 +465,10 @@ echo
 verde "Pronto! Sistema instalado e rodando."
 URL="http://${IP}"; [[ "$HTTP_PORT" == "80" ]] || URL="${URL}:${HTTP_PORT}"
 echo "  Acesse pelo navegador (celular ou PC na mesma rede):  ${URL}"
+if [[ "$IP" == 10.0.2.* ]]; then
+  amarelo "  ATENÇÃO: ${IP} é o endereço do modo NAT do VirtualBox; o PC e os celulares não alcançam a VM."
+  amarelo "  No VirtualBox: Dispositivos > Rede > Adaptador 1 > 'Placa em modo Bridge'. Depois: sudo reboot e hostname -I"
+fi
 echo "  Ver se está rodando:   sudo systemctl status agendamento"
 echo "  Ver os logs:           sudo journalctl -u agendamento -f"
 echo "  Atualizar o código:    rode este mesmo comando de novo"
