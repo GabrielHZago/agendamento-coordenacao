@@ -86,3 +86,10 @@ def test_origem_de_outro_site_recusada(client_anonimo):
 def test_busca_com_colchete(lucas):
     # "[" é curinga no LIKE do SQL Server; aqui só garante que a busca não quebra
     assert lucas.get("/api/agendamentos/meus?q=[a-z]").status_code == 200
+
+
+def test_telas_sempre_conferidas_no_servidor(client_anonimo):
+    # Sem isso o navegador junta index.html novo com app.js antigo depois de uma atualização
+    for caminho in ("/", "/js/app.js", "/css/app.css"):
+        assert client_anonimo.get(caminho).headers["cache-control"] == "no-cache", caminho
+    assert "cross-origin-opener-policy" not in client_anonimo.get("/").headers   # só em HTTPS

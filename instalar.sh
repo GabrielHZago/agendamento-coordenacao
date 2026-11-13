@@ -369,12 +369,23 @@ server {
     limit_req_status 429;
     limit_conn_status 429;
 
-    # Arquivos fixos (Bootstrap, JS, CSS) saem direto do disco, sem passar pelo Python
-    location ~ ^/(vendor|js|css)/ {
+    # Arquivos fixos saem direto do disco, sem passar pelo Python.
+    # Bootstrap e IMask (vendor/) não mudam: cache de 7 dias.
+    location /vendor/ {
         root ${APP_DIR}/frontend;
         limit_req zone=geral burst=80 nodelay;
         add_header X-Content-Type-Options nosniff always;
-        expires 1h;
+        expires 7d;
+        access_log off;
+        try_files \$uri =404;
+    }
+    # JS e CSS do sistema mudam a cada atualização: o navegador sempre confere (304 se não mudou),
+    # senão ficaria com o app.js antigo junto do index.html novo.
+    location ~ ^/(js|css)/ {
+        root ${APP_DIR}/frontend;
+        limit_req zone=geral burst=80 nodelay;
+        add_header X-Content-Type-Options nosniff always;
+        add_header Cache-Control "no-cache" always;
         access_log off;
         try_files \$uri =404;
     }

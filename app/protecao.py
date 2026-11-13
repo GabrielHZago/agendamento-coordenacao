@@ -47,9 +47,10 @@ CABECALHOS = {
     "X-Frame-Options": "DENY",                     # ninguém embute o sistema num iframe (clickjacking)
     "Referrer-Policy": "same-origin",
     "Permissions-Policy": "camera=(), microphone=(), geolocation=(), payment=(), usb=()",
-    "Cross-Origin-Opener-Policy": "same-origin",
     "Cross-Origin-Resource-Policy": "same-origin",
 }
+# Só vale em HTTPS; em HTTP o navegador ignora e ainda mostra erro no console
+CABECALHOS_HTTPS = {"Cross-Origin-Opener-Policy": "same-origin"}
 
 # A documentação (/docs) carrega o Swagger de uma CDN; fica sem CSP e só existe com API_DOCS=1
 SEM_CSP = ("/docs", "/redoc", "/openapi.json")
@@ -75,9 +76,12 @@ async def cabecalhos_e_tamanho(request: Request, call_next):
         return JSONResponse({"detail": "Origem não permitida."}, status_code=403)
 
     resposta = await call_next(request)
-    for nome, valor in CABECALHOS.items():
+    extras = CABECALHOS_HTTPS if request.url.scheme == "https" else {}
+    for nome, valor in {**CABECALHOS, **extras}.items():
         resposta.headers.setdefault(nome, valor)
     caminho = request.url.path
+    if caminho == "/" or caminho.startswith(("/js/", "/css/")) or caminho.endswith(".html"):
+        resposta.headers["Cache-Control"] = "no-cache"   # telas sempre conferidas: HTML e JS da mesma versão
     if not caminho.startswith(SEM_CSP):
         resposta.headers.setdefault("Content-Security-Policy", CSP)
     if caminho.startswith("/api/"):
