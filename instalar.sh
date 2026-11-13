@@ -69,6 +69,21 @@ esac
 MEM_MB=$(awk '/MemTotal/ {print int($2/1024)}' /proc/meminfo)
 (( MEM_MB >= 1900 )) || erro "o SQL Server precisa de pelo menos 2 GB de RAM (a VM tem ${MEM_MB} MB); recomendado 4 GB"
 
+# ---------- apt ocupado ----------
+# Logo depois que a VM liga, o Ubuntu roda a atualização automática (unattended-upgrades),
+# que segura o apt. Em vez de falhar com "Could not get lock", cada apt-get espera até 15 min.
+echo 'DPkg::Lock::Timeout "900";' > /etc/apt/apt.conf.d/99agendamento-espera
+espera_apt() {
+  local i
+  for i in $(seq 1 180); do
+    fuser /var/lib/dpkg/lock-frontend /var/lib/dpkg/lock &>/dev/null || return 0
+    (( i == 1 )) && amarelo "O Ubuntu está atualizando sozinho (unattended-upgrades). Esperando terminar..."
+    sleep 5
+  done
+  erro "o apt continua ocupado depois de 15 min. Veja: ps aux | grep -i apt"
+}
+espera_apt
+
 # ---------- Espaço em disco (antes de baixar qualquer coisa) ----------
 # O SQL Server, as atualizações e o Python ocupam ~4 GB. Sem espaço, o apt e o SQL Server
 # falham com mensagens confusas ("signature failed", "No space left on device").
@@ -168,6 +183,7 @@ fi
 # ---------- 1. Sistema operacional ----------
 verde "[1/7] Atualizando o Ubuntu e instalando pacotes básicos..."
 # Termina instalações interrompidas (ex.: rodada anterior com o disco cheio)
+espera_apt
 dpkg --configure -a || true
 apt-get install -f -y || true
 apt-get update -y
