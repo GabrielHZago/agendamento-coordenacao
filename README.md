@@ -1,4 +1,48 @@
-# Instalação — Sistema de Agendamento da Coordenação
+# Agenda da Coordenação
+
+Sistema web para alunos marcarem atendimento com a coordenação do curso, pelo celular ou pelo computador.
+Projeto acadêmico da equipe Tech Titans, Faculdade Anhanguera de Osasco, 2026.
+
+- **Aluno:** escolhe o motivo, a disciplina e um horário livre. A reunião presencial é confirmada na hora.
+  Pedidos online, como entrega de atestado, vão para o coordenador aceitar ou recusar.
+- **Coordenador:** monta a escala semanal, reserva horários para si (almoço, emergência),
+  responde pedidos online, consulta as reuniões por período e configura os motivos de contato.
+
+**Tecnologias:** Python 3.12 + FastAPI + SQLAlchemy · SQL Server 2025 Express (SQLite no desenvolvimento) ·
+HTML + Bootstrap 5.3 + JavaScript, sem etapa de build · nginx + systemd numa VM Ubuntu.
+
+Documentação do projeto (requisitos, planejamento, DER, slides): pasta do Google Drive da equipe.
+
+## Estrutura
+
+```
+app/                 API em FastAPI
+  main.py            cria o app, middlewares e serve o frontend
+  config.py          variáveis do .env e constantes das regras de negócio
+  database.py        conexão (SQL Server ou SQLite)
+  models.py          tabelas (espelha database/script_banco_agendamento.sql)
+  protecao.py        limite de requisições, CSP e cabeçalhos de segurança
+  security.py        senhas (bcrypt), sessão e bloqueio de login
+  servicos.py        horários livres, conflitos e avisos
+  seed_demo.py       dados de demonstração
+  routers/           rotas: auth, motivos, agenda, agendamentos
+frontend/            telas (servidas pelo próprio FastAPI)
+  index.html
+  css/app.css
+  js/                util.js (API, modal, máscaras), app.js (telas), demo.js (modo demonstração)
+  vendor/            Bootstrap, Bootstrap Icons e IMask (locais, sem CDN)
+database/
+  script_banco_agendamento.sql   tabelas e dados iniciais (referência do modelo)
+tests/               testes automatizados (pytest)
+instalar.sh          instala e configura tudo numa VM Ubuntu
+```
+
+Logins de demonstração (criados por `app/seed_demo.py`): coordenador `coordenacao@demo.edu` / `Coord2026!`;
+alunos RA `1234567` ou `7654321` / `Aluno2026!`. Para ver as telas sem servidor, abra com `?demo`.
+
+---
+
+# Instalação
 
 > **Suposição de ambiente.** A equipe não tem acesso à infraestrutura da faculdade.
 > Esta instalação simula um servidor da instituição com uma máquina virtual na rede local.

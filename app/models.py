@@ -1,4 +1,4 @@
-"""Mapeamento das tabelas criadas pelo script_banco_agendamento.sql (versão 4).
+"""Mapeamento das tabelas criadas por database/script_banco_agendamento.sql (versão 4).
 
 O SQL Server já tem as tabelas: aqui só dizemos ao SQLAlchemy como elas são.
 No SQLite (teste local), as tabelas são criadas a partir daqui.

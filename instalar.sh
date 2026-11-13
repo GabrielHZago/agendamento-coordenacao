@@ -49,7 +49,7 @@ for v in DB_NAME DB_APP_USER APP_USER; do
   [[ "${!v}" =~ ^[A-Za-z_][A-Za-z0-9_]{0,63}$ ]] || { echo "Valor inválido em $v" >&2; exit 1; }
 done
 [[ "$HTTP_PORT$APP_PORT" =~ ^[0-9]+$ ]] || { echo "Porta inválida" >&2; exit 1; }
-SQL_SCRIPT="script_banco_agendamento.sql"
+SQL_SCRIPT="database/script_banco_agendamento.sql"
 SQLCMD=/opt/mssql-tools18/bin/sqlcmd
 
 verde()   { printf '\033[1;32m%s\033[0m\n' "$*"; }
