@@ -1,71 +1,117 @@
 #!/usr/bin/env bash
 # =============================================================================
 # Sistema de Agendamento da Coordenação — Tech Titans
-# Instalação e configuração em uma VM Ubuntu Server 24.04 (ou 22.04)
+# Instalação e configuração completa numa VM Ubuntu Server 24.04 (ou 22.04)
 #
 # ATENÇÃO: a equipe não tem acesso à infraestrutura real da faculdade.
 # Este script é uma SUPOSIÇÃO de ambiente: uma máquina virtual na rede local,
 # acessada pelo navegador de celulares e computadores da mesma rede.
 #
-# Uso (na VM, dentro da pasta do projeto):
-#     sudo bash instalar.sh
+# Uso — qualquer uma das formas:
+#   a) Numa VM limpa, sem baixar nada antes (o script baixa o projeto do GitHub):
+#        curl -fsSL https://raw.githubusercontent.com/GabrielHZago/agendamento-coordenacao/main/instalar.sh | sudo bash
+#   b) Dentro da pasta do projeto já clonada/copiada:
+#        sudo bash instalar.sh
+#
+# Variáveis opcionais (ex.: curl ... | sudo SA_PASSWORD='Senha#Forte1' SEED_DEMO=0 bash):
+#   SA_PASSWORD  senha do administrador do SQL Server (se faltar, é perguntada)
+#   SEED_DEMO    1 = cria dados de demonstração (padrão), 0 = não cria
+#   REPO_URL / REPO_BRANCH   de onde baixar o projeto na forma (a)
+#   APP_DIR, APP_PORT, DB_NAME, DB_APP_USER
 #
 # O que ele faz:
-#   1. Instala SQL Server 2025 Express, ODBC Driver 18 e sqlcmd
-#   2. Cria o banco "agendamento" e roda o script das tabelas
-#   3. Cria um usuário do banco só com as permissões que o sistema precisa
-#   4. Instala Python, cria o ambiente virtual e as dependências
+#   0. Baixa o projeto (git clone), se ainda não estiver na pasta
+#   1. Atualiza o Ubuntu, instala Python, git, SSH e ajusta o fuso horário
+#   2. Instala SQL Server 2025 Express, ODBC Driver 18 e sqlcmd
+#   3. Cria o banco "agendamento", roda o script das tabelas e cria um usuário
+#      do banco só com as permissões que o sistema precisa
+#   4. Instala o sistema em /opt/agendamento com ambiente virtual Python
 #   5. Cria o serviço "agendamento" (inicia sozinho quando a VM liga)
 #   6. Libera no firewall só o SSH e a porta do sistema
+#   7. Confere se o sistema respondeu e mostra o endereço de acesso
+#
+# Pode rodar de novo (para atualizar o código): o banco existente é mantido.
 # =============================================================================
 set -euo pipefail
 
-# ---------- Configuração (pode mudar aqui ou passar como variável) ----------
+# ---------- Configuração ----------
+REPO_URL="${REPO_URL:-https://github.com/GabrielHZago/agendamento-coordenacao.git}"
+REPO_BRANCH="${REPO_BRANCH:-main}"
 APP_DIR="${APP_DIR:-/opt/agendamento}"        # onde o sistema fica instalado
 APP_USER="${APP_USER:-agendamento}"           # usuário Linux que roda o sistema
 APP_PORT="${APP_PORT:-8000}"                  # porta acessada pelo navegador
 DB_NAME="${DB_NAME:-agendamento}"
 DB_APP_USER="${DB_APP_USER:-app_agendamento}" # usuário do banco usado pelo sistema
-SQL_SCRIPT="${SQL_SCRIPT:-script_banco_agendamento.sql}"
-ORIGEM="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"   # pasta do projeto
+SQL_SCRIPT="script_banco_agendamento.sql"
+SQLCMD=/opt/mssql-tools18/bin/sqlcmd
 
 verde()   { printf '\033[1;32m%s\033[0m\n' "$*"; }
 amarelo() { printf '\033[1;33m%s\033[0m\n' "$*"; }
 erro()    { printf '\033[1;31mERRO: %s\033[0m\n' "$*" >&2; exit 1; }
+trap 'erro "falhou na linha $LINENO. Corrija e rode de novo (o script pode ser repetido)."' ERR
 
 # ---------- Verificações ----------
-[[ $EUID -eq 0 ]] || erro "rode com sudo: sudo bash instalar.sh"
+[[ $EUID -eq 0 ]] || erro "rode com sudo (ex.: sudo bash instalar.sh)"
 . /etc/os-release
 [[ "$ID" == "ubuntu" ]] || erro "este script foi feito para Ubuntu (encontrado: $ID)"
 case "$VERSION_ID" in
   24.04|22.04) ;;
   *) erro "use Ubuntu 24.04 ou 22.04 (encontrado: $VERSION_ID)" ;;
 esac
+[[ "$(uname -m)" == "x86_64" ]] || erro "o SQL Server para Linux precisa de processador x86_64 (encontrado: $(uname -m))"
 MEM_MB=$(awk '/MemTotal/ {print int($2/1024)}' /proc/meminfo)
-(( MEM_MB >= 1900 )) || erro "o SQL Server precisa de pelo menos 2 GB de RAM (a VM tem ${MEM_MB} MB)"
+(( MEM_MB >= 1900 )) || erro "o SQL Server precisa de pelo menos 2 GB de RAM (a VM tem ${MEM_MB} MB); recomendado 4 GB"
+
+# Senha do sa: variável, ou pergunta no terminal (funciona também com "curl | sudo bash")
+if [[ -z "${SA_PASSWORD:-}" ]]; then
+  [[ -r /dev/tty ]] || erro "sem terminal para perguntar a senha; passe SA_PASSWORD=... na linha de comando"
+  while true; do
+    read -rsp "Senha do administrador do SQL Server (sa) — mín. 8 caracteres com maiúscula, minúscula, número e símbolo: " SA_PASSWORD </dev/tty; echo
+    read -rsp "Repita a senha: " SA_CONFIRMA </dev/tty; echo
+    [[ "$SA_PASSWORD" == "$SA_CONFIRMA" ]] && break
+    amarelo "As senhas não conferem. Tente de novo."
+  done
+fi
+(( ${#SA_PASSWORD} >= 8 )) || erro "a senha do sa precisa ter pelo menos 8 caracteres"
+
+export DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=a   # apt sem perguntas
+APT_OPTS=(-y -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold)
+
+# ---------- 0. Projeto: usa a pasta atual ou baixa do GitHub ----------
+ORIGEM=""
+if [[ -n "${BASH_SOURCE[0]:-}" && -f "${BASH_SOURCE[0]}" ]]; then
+  ORIGEM="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+fi
+if [[ -z "$ORIGEM" || ! -d "$ORIGEM/app" ]]; then
+  verde "[0/7] Baixando o projeto de $REPO_URL ($REPO_BRANCH)..."
+  apt-get update -y
+  apt-get install -y git ca-certificates
+  ORIGEM="/opt/agendamento-src"
+  if [[ -d "$ORIGEM/.git" ]]; then
+    git -C "$ORIGEM" fetch --depth 1 origin "$REPO_BRANCH"
+    git -C "$ORIGEM" reset --hard "origin/$REPO_BRANCH"
+  else
+    rm -rf "$ORIGEM"
+    git clone --depth 1 --branch "$REPO_BRANCH" "$REPO_URL" "$ORIGEM"
+  fi
+fi
 [[ -f "$ORIGEM/$SQL_SCRIPT" ]] || erro "não achei $SQL_SCRIPT em $ORIGEM"
 [[ -f "$ORIGEM/requirements.txt" ]] || erro "não achei requirements.txt em $ORIGEM"
 
-# ---------- Senhas (pedidas uma vez, nunca gravadas em texto no script) ----------
-gerar_senha() { printf '%sAa1!' "$(openssl rand -hex 12)"; }   # cumpre a política de senha do SQL Server
-if [[ -z "${SA_PASSWORD:-}" ]]; then
-  read -rsp "Senha do administrador do SQL Server (sa) — mín. 8 caracteres com maiúscula, minúscula, número e símbolo: " SA_PASSWORD; echo
-fi
-DB_APP_PASSWORD="${DB_APP_PASSWORD:-$(gerar_senha)}"
-SECRET_KEY="$(openssl rand -hex 32)"
-
-# ---------- 1. Pacotes básicos ----------
-verde "[1/6] Atualizando o sistema e instalando pacotes básicos..."
-export DEBIAN_FRONTEND=noninteractive
+# ---------- 1. Sistema operacional ----------
+verde "[1/7] Atualizando o Ubuntu e instalando pacotes básicos..."
 apt-get update -y
-apt-get install -y curl gnupg ca-certificates software-properties-common \
-                   python3 python3-venv python3-pip ufw
+apt-get upgrade "${APT_OPTS[@]}"
+apt-get install "${APT_OPTS[@]}" curl gnupg openssl ca-certificates git openssh-server ufw \
+                   python3 python3-venv python3-pip
+systemctl enable --now ssh || true
 timedatectl set-timezone America/Sao_Paulo || true   # horários das reuniões em Brasília (RNF09)
 
-# ---------- 2. SQL Server 2025 Express ----------
-verde "[2/6] Instalando o SQL Server 2025 (edição Express, gratuita)..."
+# ---------- 2. SQL Server 2025 Express + ferramentas ----------
+verde "[2/7] Instalando o SQL Server 2025 (edição Express, gratuita)..."
+# Os arquivos .list da Microsoft apontam para esta chave (signed-by=/usr/share/keyrings/microsoft-prod.gpg)
 curl -fsSL https://packages.microsoft.com/keys/microsoft.asc \
-  | tee /etc/apt/trusted.gpg.d/microsoft.asc >/dev/null
+  | gpg --dearmor --yes -o /usr/share/keyrings/microsoft-prod.gpg
 curl -fsSL "https://packages.microsoft.com/config/ubuntu/${VERSION_ID}/mssql-server-2025.list" \
   -o /etc/apt/sources.list.d/mssql-server-2025.list
 curl -fsSL "https://packages.microsoft.com/config/ubuntu/${VERSION_ID}/prod.list" \
@@ -73,58 +119,66 @@ curl -fsSL "https://packages.microsoft.com/config/ubuntu/${VERSION_ID}/prod.list
 apt-get update -y
 apt-get install -y mssql-server
 
-if ! systemctl is-active --quiet mssql-server || [[ ! -f /var/opt/mssql/mssql.conf ]]; then
+if ! systemctl is-active --quiet mssql-server; then
   MSSQL_SA_PASSWORD="$SA_PASSWORD" MSSQL_PID="Express" \
     /opt/mssql/bin/mssql-conf -n setup accept-eula
+  # Deixa ~40% da memória para o sistema operacional e o Python
+  /opt/mssql/bin/mssql-conf set memory.memorylimitmb $(( MEM_MB * 6 / 10 )) || true
+  systemctl restart mssql-server
 fi
 systemctl enable --now mssql-server
 
-# Ferramentas: ODBC Driver 18 (usado pelo Python) e sqlcmd
+# ODBC Driver 18 (usado pelo Python) e sqlcmd
 ACCEPT_EULA=Y apt-get install -y msodbcsql18 mssql-tools18 unixodbc-dev
-SQLCMD=/opt/mssql-tools18/bin/sqlcmd
-grep -q mssql-tools18 /etc/profile.d/mssql.sh 2>/dev/null \
-  || echo 'export PATH="$PATH:/opt/mssql-tools18/bin"' > /etc/profile.d/mssql.sh
+echo 'export PATH="$PATH:/opt/mssql-tools18/bin"' > /etc/profile.d/mssql.sh
 
-# Espera o banco aceitar conexões (até ~60 s)
-for i in $(seq 1 30); do
-  "$SQLCMD" -C -S localhost -U sa -P "$SA_PASSWORD" -Q "SELECT 1" &>/dev/null && break
+# sqlcmd como sa. -f 65001: o script SQL está em UTF-8 (acentos).
+# -I: liga QUOTED_IDENTIFIER (o sqlcmd vem com OFF, e aí o SQL Server recusa criar o índice filtrado)
+sa_sql() { "$SQLCMD" -C -I -S localhost -U sa -P "$SA_PASSWORD" -f 65001 "$@"; }
+
+# Espera o banco aceitar conexões (até ~90 s)
+for i in $(seq 1 45); do
+  sa_sql -Q "SELECT 1" &>/dev/null && break
+  (( i == 45 )) && erro "o SQL Server não respondeu (senha do sa errada?). Veja: journalctl -u mssql-server"
   sleep 2
-  (( i == 30 )) && erro "o SQL Server não respondeu. Veja: journalctl -u mssql-server"
 done
 
 # ---------- 3. Banco, tabelas e usuário com permissão mínima ----------
-verde "[3/6] Criando o banco '$DB_NAME' e as tabelas..."
-EXISTE=$("$SQLCMD" -C -S localhost -U sa -P "$SA_PASSWORD" -h -1 -W \
-          -Q "SET NOCOUNT ON; SELECT COUNT(*) FROM sys.databases WHERE name = '$DB_NAME'")
+verde "[3/7] Criando o banco '$DB_NAME' e as tabelas..."
+EXISTE=$(sa_sql -h -1 -W -Q "SET NOCOUNT ON; SELECT COUNT(*) FROM sys.databases WHERE name = '$DB_NAME'")
 if [[ "${EXISTE//[[:space:]]/}" == "0" ]]; then
-  "$SQLCMD" -C -S localhost -U sa -P "$SA_PASSWORD" -b -Q "CREATE DATABASE [$DB_NAME]"
-  "$SQLCMD" -C -S localhost -U sa -P "$SA_PASSWORD" -b -d "$DB_NAME" -i "$ORIGEM/$SQL_SCRIPT"
+  sa_sql -b -Q "CREATE DATABASE [$DB_NAME]"
+  sa_sql -b -d "$DB_NAME" -i "$ORIGEM/$SQL_SCRIPT"
 else
-  amarelo "O banco '$DB_NAME' já existe; as tabelas não foram recriadas."
+  amarelo "O banco '$DB_NAME' já existe; as tabelas foram mantidas."
 fi
 
+# Senha do usuário do banco: só letras e números (entra numa URL no .env sem precisar de escape)
+DB_APP_PASSWORD="$(openssl rand -hex 16)Aa1"
+SECRET_KEY="$(openssl rand -hex 32)"
+
 # Usuário do sistema: lê e grava dados, mas não altera a estrutura do banco (RNF14)
-"$SQLCMD" -C -S localhost -U sa -P "$SA_PASSWORD" -b -Q "
+sa_sql -b -Q "
 IF NOT EXISTS (SELECT 1 FROM sys.server_principals WHERE name = '$DB_APP_USER')
     CREATE LOGIN [$DB_APP_USER] WITH PASSWORD = '$DB_APP_PASSWORD', CHECK_POLICY = ON;
 ELSE
     ALTER LOGIN [$DB_APP_USER] WITH PASSWORD = '$DB_APP_PASSWORD';"
-"$SQLCMD" -C -S localhost -U sa -P "$SA_PASSWORD" -b -d "$DB_NAME" -Q "
+sa_sql -b -d "$DB_NAME" -Q "
 IF NOT EXISTS (SELECT 1 FROM sys.database_principals WHERE name = '$DB_APP_USER')
     CREATE USER [$DB_APP_USER] FOR LOGIN [$DB_APP_USER];
 ALTER ROLE db_datareader ADD MEMBER [$DB_APP_USER];
 ALTER ROLE db_datawriter ADD MEMBER [$DB_APP_USER];"
 
 # ---------- 4. Aplicação Python ----------
-verde "[4/6] Instalando o sistema em $APP_DIR..."
+verde "[4/7] Instalando o sistema em $APP_DIR..."
 id -u "$APP_USER" &>/dev/null || useradd --system --home "$APP_DIR" --shell /usr/sbin/nologin "$APP_USER"
 mkdir -p "$APP_DIR" "$APP_DIR/uploads"
-# Copia o projeto (app/, frontend/, requirements.txt...) sem levar .git nem ambientes locais
-tar -C "$ORIGEM" --exclude=.git --exclude=.venv --exclude=__pycache__ --exclude=uploads -cf - . \
-  | tar -C "$APP_DIR" -xf -
-python3 -m venv "$APP_DIR/.venv"
-"$APP_DIR/.venv/bin/pip" install --upgrade pip
-"$APP_DIR/.venv/bin/pip" install -r "$APP_DIR/requirements.txt"
+# Copia o projeto (app/, frontend/, requirements.txt...) sem .git, ambientes locais nem dados de teste
+tar -C "$ORIGEM" --exclude=.git --exclude=.venv --exclude=__pycache__ --exclude=uploads \
+    --exclude=.env --exclude='*.db' --exclude=tests -cf - . | tar -C "$APP_DIR" -xf -
+[[ -x "$APP_DIR/.venv/bin/python" ]] || python3 -m venv "$APP_DIR/.venv"
+"$APP_DIR/.venv/bin/pip" install --quiet --upgrade pip
+"$APP_DIR/.venv/bin/pip" install --quiet -r "$APP_DIR/requirements.txt"
 
 cat > "$APP_DIR/.env" <<EOF
 # Gerado por instalar.sh em $(date '+%d/%m/%Y %H:%M')
@@ -137,13 +191,13 @@ chown -R "$APP_USER":"$APP_USER" "$APP_DIR"
 chmod 600 "$APP_DIR/.env"
 chmod 750 "$APP_DIR/uploads"
 
-# Dados de demonstração (curso, coordenador, alunos, escala). Para pular: SEED_DEMO=0 sudo -E bash instalar.sh
+# Dados de demonstração (curso, coordenador, alunos, escala). Para pular: SEED_DEMO=0
 if [[ "${SEED_DEMO:-1}" == "1" ]]; then
   (cd "$APP_DIR" && sudo -u "$APP_USER" "$APP_DIR/.venv/bin/python" -m app.seed_demo)
 fi
 
 # ---------- 5. Serviço (sobe sozinho com a VM) ----------
-verde "[5/6] Criando o serviço 'agendamento'..."
+verde "[5/7] Criando o serviço 'agendamento'..."
 WORKERS=$(( $(nproc) > 1 ? $(nproc) : 2 ))
 cat > /etc/systemd/system/agendamento.service <<EOF
 [Unit]
@@ -166,21 +220,33 @@ PrivateTmp=true
 WantedBy=multi-user.target
 EOF
 systemctl daemon-reload
-systemctl enable --now agendamento
+systemctl enable agendamento
+systemctl restart agendamento
 
 # ---------- 6. Firewall: só SSH e a porta do sistema (banco fica fechado) ----------
-verde "[6/6] Configurando o firewall..."
-ufw allow OpenSSH
+verde "[6/7] Configurando o firewall..."
+ufw allow 22/tcp
 ufw allow "${APP_PORT}/tcp"
 ufw --force enable
 
+# ---------- 7. Conferência final ----------
+verde "[7/7] Conferindo se o sistema respondeu..."
+for i in $(seq 1 30); do
+  curl -fsS "http://127.0.0.1:${APP_PORT}/api/saude" &>/dev/null && break
+  (( i == 30 )) && erro "o sistema não respondeu. Veja: journalctl -u agendamento -n 50"
+  sleep 1
+done
+
+trap - ERR
 IP=$(hostname -I | awk '{print $1}')
 echo
-verde "Pronto!"
+verde "Pronto! Sistema instalado e rodando."
 echo "  Acesse pelo navegador (celular ou PC na mesma rede):  http://${IP}:${APP_PORT}"
 echo "  Documentação da API:                                  http://${IP}:${APP_PORT}/docs"
 echo "  Ver se está rodando:   sudo systemctl status agendamento"
 echo "  Ver os logs:           sudo journalctl -u agendamento -f"
+echo "  Atualizar o código:    rode este mesmo comando de novo"
+[[ "${SEED_DEMO:-1}" == "1" ]] && \
 echo "  Logins de teste:       coordenacao@demo.edu / Coord2026!   |   aluno RA 1234567 / Aluno2026!"
 echo
 amarelo "Guarde a senha do sa. A senha do usuário do sistema está em ${APP_DIR}/.env"

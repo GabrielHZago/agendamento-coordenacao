@@ -9,33 +9,43 @@
 | Item | Valor |
 | --- | --- |
 | Sistema | Ubuntu Server 24.04 LTS (22.04 também funciona) |
-| Processador | 2 núcleos |
+| Processador | 2 núcleos, x86_64 (o SQL Server não roda em ARM) |
 | Memória | 4 GB (o SQL Server exige no mínimo 2 GB) |
 | Disco | 25 GB |
 | Rede | **Placa em modo Bridge**, para a VM ganhar um IP da mesma rede dos celulares e PCs |
 
-Durante a instalação do Ubuntu, marque "Install OpenSSH server".
+Durante a instalação do Ubuntu, marque "Install OpenSSH server" (o script também instala, se faltar).
 
-## 2. Copiar o projeto para a VM
+## 2. Instalar tudo com um comando
 
-Pela rede (do seu PC): `scp -r agendamento/ usuario@IP_DA_VM:~/`
-ou clonando o repositório: `git clone <url-do-repositorio> agendamento`
-
-A pasta precisa ter: `app/`, `frontend/`, `requirements.txt`, `script_banco_agendamento.sql` e `instalar.sh`.
-
-## 3. Rodar a instalação
+Na VM, logado com um usuário que tenha `sudo`:
 
 ```bash
-cd ~/agendamento
-sudo bash instalar.sh
+curl -fsSL https://raw.githubusercontent.com/GabrielHZago/agendamento-coordenacao/main/instalar.sh | sudo bash
 ```
 
-O script pede a senha do administrador do banco (`sa`) e faz o resto:
-SQL Server 2025 Express, banco e tabelas, usuário do banco com permissão mínima,
-Python e dependências, serviço que sobe sozinho com a VM e firewall.
+O script baixa o projeto do GitHub, pede a senha do administrador do banco (`sa`) e faz o resto:
+atualiza o Ubuntu, instala SQL Server 2025 Express, cria banco, tabelas e um usuário do banco
+com permissão mínima, instala Python e as dependências, cria o serviço que sobe sozinho com a VM,
+configura o firewall e confere se o sistema respondeu.
 No fim, ele mostra o endereço de acesso, por exemplo `http://192.168.0.15:8000`.
 
-## 4. Acessar pelos terminais
+Outras formas:
+
+```bash
+# sem perguntas (senha do sa na linha de comando) e sem dados de demonstração
+curl -fsSL https://raw.githubusercontent.com/GabrielHZago/agendamento-coordenacao/main/instalar.sh \
+  | sudo SA_PASSWORD='Troque#Esta1' SEED_DEMO=0 bash
+
+# a partir de uma pasta já clonada/copiada
+git clone https://github.com/GabrielHZago/agendamento-coordenacao.git
+cd agendamento-coordenacao && sudo bash instalar.sh
+```
+
+Para **atualizar** o sistema depois de mudar o código no GitHub, rode o mesmo comando de novo:
+o banco existente é mantido.
+
+## 3. Acessar pelos terminais
 
 Qualquer celular ou computador **na mesma rede** abre o endereço mostrado no navegador.
 
@@ -44,11 +54,22 @@ Qualquer celular ou computador **na mesma rede** abre o endereço mostrado no na
   ligue o notebook com a VM e os celulares nessa mesma rede.
 - O banco (porta 1433) não fica exposto: só o sistema conversa com ele, dentro da VM.
 
+## Desenvolvimento local (sem SQL Server)
+
+```bash
+python -m venv .venv
+.venv\Scripts\activate          # Windows  (Linux/Mac: source .venv/bin/activate)
+pip install -r requirements-dev.txt
+python -m app.seed_demo         # cria dev.db com dados de demonstração
+uvicorn app.main:app --reload --port 8000
+pytest                          # testes automatizados
+```
+
 ## Comandos úteis
 
 | Para | Comando |
 | --- | --- |
 | Ver se o sistema está rodando | `sudo systemctl status agendamento` |
 | Ver os logs ao vivo | `sudo journalctl -u agendamento -f` |
-| Reiniciar depois de mudar o código | `sudo systemctl restart agendamento` |
-| Abrir o banco pelo terminal | `sqlcmd -C -S localhost -U sa -d agendamento` |
+| Reiniciar | `sudo systemctl restart agendamento` |
+| Abrir o banco pelo terminal | `sqlcmd -C -I -S localhost -U sa -d agendamento` |
