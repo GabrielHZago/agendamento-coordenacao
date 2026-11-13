@@ -1,0 +1,11 @@
+# Ambiente e caches
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Dados locais (nunca versionar)
+.env
+dev.db
+*.db
+uploads/

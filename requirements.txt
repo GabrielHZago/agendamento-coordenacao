@@ -1,0 +1,12 @@
+# Versões testadas em 13/11/2026 (Python 3.12 na VM e 3.14 no Windows).
+fastapi==0.162.7
+email-validator==2.3.0
+uvicorn[standard]==0.54.0
+SQLAlchemy==2.1.8
+pyodbc==5.5.0
+bcrypt==5.0.0
+itsdangerous==2.2.0
+python-dotenv==1.2.4
+python-multipart==0.0.33
+slowapi==0.1.10
+APScheduler==3.11.3

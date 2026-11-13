@@ -1,0 +1,1001 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Agenda da Coordenação — Tech Titans</title>
+<meta name="description" content="Sistema de agendamento de atendimentos com a coordenação de curso">
+<style>
+/* ============ Temas (escuro é o padrão) ============ */
+:root, [data-theme="dark"] {
+  --bg: #0d0f13; --surface: #161a21; --surface-2: #1d222b; --border: #2a303b;
+  --text: #eceef2; --muted: #9aa3b2; --accent: #e5383b; --accent-hover: #f05254; --accent-ink: #fff;
+  --accent-soft: rgba(229,56,59,.14); --ok: #3ecf8e; --ok-soft: rgba(62,207,142,.14);
+  --warn: #f5b942; --warn-soft: rgba(245,185,66,.14); --info: #5aa9ff; --info-soft: rgba(90,169,255,.14);
+  --neutral-soft: rgba(154,163,178,.14); --shadow: 0 8px 28px rgba(0,0,0,.45); color-scheme: dark;
+}
+[data-theme="light"] {
+  --bg: #f4f5f8; --surface: #ffffff; --surface-2: #f0f2f6; --border: #dde1e8;
+  --text: #171a21; --muted: #5d6676; --accent: #d62828; --accent-hover: #b81f1f; --accent-ink: #fff;
+  --accent-soft: rgba(214,40,40,.09); --ok: #138a5b; --ok-soft: rgba(19,138,91,.1);
+  --warn: #a86b00; --warn-soft: rgba(168,107,0,.1); --info: #1f6fd1; --info-soft: rgba(31,111,209,.1);
+  --neutral-soft: rgba(93,102,118,.1); --shadow: 0 8px 24px rgba(20,25,35,.1); color-scheme: light;
+}
+* { box-sizing: border-box; }
+html { font-size: 16px; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 1rem/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+a { color: var(--accent); }
+h1 { font-size: 1.5rem; margin: 0 0 .25rem; } h2 { font-size: 1.15rem; margin: 0 0 .75rem; } h3 { font-size: 1rem; margin: 0; }
+.muted { color: var(--muted); } .small { font-size: .875rem; } .mt { margin-top: 1rem; } .mb0 { margin-bottom: 0; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+
+/* ============ Cabeçalho ============ */
+header { position: sticky; top: 0; z-index: 20; background: var(--surface); border-bottom: 1px solid var(--border); }
+.bar { max-width: 1100px; margin: 0 auto; display: flex; align-items: center; gap: .75rem; padding: .6rem 1rem; }
+.brand { display: flex; align-items: center; gap: .55rem; font-weight: 700; text-decoration: none; color: var(--text); white-space: nowrap; }
+.brand .logo { width: 30px; height: 30px; border-radius: 8px; background: var(--accent); display: grid; place-items: center; color: #fff; font-weight: 800; font-size: .8rem; letter-spacing: -.5px; }
+.brand small { display: block; font-weight: 500; color: var(--muted); font-size: .7rem; line-height: 1; }
+nav.menu { display: flex; gap: .25rem; margin-left: .75rem; }
+nav.menu a { padding: .45rem .7rem; border-radius: 8px; color: var(--muted); text-decoration: none; font-weight: 600; font-size: .92rem; }
+nav.menu a.ativo, nav.menu a:hover { color: var(--text); background: var(--surface-2); }
+.tools { margin-left: auto; display: flex; gap: .35rem; align-items: center; }
+.icon-btn { background: transparent; border: 1px solid var(--border); color: var(--text); border-radius: 8px; min-width: 38px; height: 38px; padding: 0 .55rem; cursor: pointer; font: inherit; font-size: .85rem; display: inline-flex; align-items: center; justify-content: center; gap: .3rem; }
+.icon-btn:hover { background: var(--surface-2); }
+.icon-btn[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
+.fontes { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+.fontes button { border: 0; background: transparent; color: var(--text); height: 36px; width: 34px; cursor: pointer; font-weight: 700; }
+.fontes button[aria-pressed="true"] { background: var(--surface-2); color: var(--accent); }
+.hamb { display: none; }
+@media (max-width: 860px) {
+  nav.menu { display: none; position: absolute; top: 100%; left: 0; right: 0; background: var(--surface); border-bottom: 1px solid var(--border); flex-direction: column; padding: .5rem 1rem 1rem; margin: 0; }
+  nav.menu.aberto { display: flex; }
+  .hamb { display: inline-flex; }
+  .brand small, .tools .txt { display: none; }
+}
+@media (max-width: 560px) {
+  .bar { gap: .4rem; padding: .5rem .6rem; }
+  .brand > span:last-child { display: none; }
+  .fontes button { width: 30px; }
+  .icon-btn { min-width: 34px; padding: 0 .4rem; }
+}
+
+/* ============ Layout e componentes ============ */
+main { max-width: 1100px; margin: 0 auto; padding: 1.25rem 1rem 4rem; }
+.topo { display: flex; align-items: flex-end; justify-content: space-between; gap: 1rem; flex-wrap: wrap; margin-bottom: 1.25rem; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 1.1rem; }
+.card + .card { margin-top: .85rem; }
+.grid { display: grid; gap: .85rem; }
+.grid-2 { grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); align-items: start; }
+.row { display: flex; gap: .6rem; align-items: center; flex-wrap: wrap; }
+.spacer { flex: 1; }
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: .4rem; min-height: 44px; padding: .55rem 1rem; border-radius: 10px; border: 1px solid var(--border); background: var(--surface-2); color: var(--text); font: inherit; font-weight: 600; cursor: pointer; text-decoration: none; }
+.btn:hover { filter: brightness(1.08); }
+.btn:disabled { opacity: .5; cursor: not-allowed; }
+.btn-primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.btn-primary:hover { background: var(--accent-hover); }
+.btn-ghost { background: transparent; }
+.btn-danger { background: transparent; color: var(--accent); border-color: var(--accent); }
+.btn-ok { background: var(--ok); border-color: var(--ok); color: #06140d; }
+.btn-sm { min-height: 36px; padding: .35rem .75rem; font-size: .88rem; }
+.btn-block { width: 100%; }
+label { display: block; font-weight: 600; font-size: .9rem; margin: .8rem 0 .3rem; }
+input, select, textarea { width: 100%; min-height: 44px; padding: .55rem .75rem; border-radius: 10px; border: 1px solid var(--border); background: var(--surface-2); color: var(--text); font: inherit; }
+textarea { min-height: 90px; resize: vertical; }
+input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); border-color: transparent; }
+.check { display: flex; gap: .55rem; align-items: flex-start; font-weight: 500; }
+.check input { width: 20px; min-height: 20px; height: 20px; margin-top: .15rem; accent-color: var(--accent); }
+.badge { display: inline-flex; align-items: center; gap: .3rem; padding: .18rem .6rem; border-radius: 999px; font-size: .78rem; font-weight: 700; white-space: nowrap; }
+.b-Pendente { background: var(--warn-soft); color: var(--warn); }
+.b-Aprovada { background: var(--ok-soft); color: var(--ok); }
+.b-Recusada { background: var(--accent-soft); color: var(--accent); }
+.b-Cancelada { background: var(--neutral-soft); color: var(--muted); }
+.b-Realizada { background: var(--info-soft); color: var(--info); }
+.b-neutro { background: var(--neutral-soft); color: var(--muted); }
+.b-accent { background: var(--accent-soft); color: var(--accent); }
+.alerta { border-radius: 12px; padding: .8rem 1rem; border: 1px solid var(--border); background: var(--surface-2); }
+.alerta.info { border-color: transparent; background: var(--info-soft); }
+.alerta.warn { border-color: transparent; background: var(--warn-soft); }
+.alerta.erro { border-color: transparent; background: var(--accent-soft); }
+.alerta.ok { border-color: transparent; background: var(--ok-soft); }
+.vazio { text-align: center; padding: 2rem 1rem; color: var(--muted); }
+.meta { display: flex; flex-wrap: wrap; gap: .25rem 1rem; color: var(--muted); font-size: .9rem; margin-top: .35rem; }
+.ag-card { display: flex; flex-direction: column; gap: .35rem; }
+.ag-card .cab { display: flex; gap: .4rem .6rem; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; }
+.ag-card .cab > div { flex: 1 1 180px; min-width: 0; }
+.ag-card .acoes { display: flex; gap: .5rem; flex-wrap: wrap; margin-top: .5rem; }
+.data-grande { font-size: 1.05rem; font-weight: 700; }
+.secao { margin-top: 1.75rem; }
+
+/* Login */
+.login-wrap { min-height: calc(100vh - 140px); display: grid; place-items: center; }
+.login { width: 100%; max-width: 420px; }
+.login .hero { text-align: center; margin-bottom: 1.2rem; }
+.login .hero .logo { width: 56px; height: 56px; border-radius: 14px; background: var(--accent); margin: 0 auto .7rem; display: grid; place-items: center; color: #fff; font-weight: 800; font-size: 1.2rem; }
+.segmento { display: grid; grid-template-columns: 1fr 1fr; background: var(--surface-2); border: 1px solid var(--border); border-radius: 12px; padding: 4px; }
+.segmento button { border: 0; background: transparent; color: var(--muted); font: inherit; font-weight: 700; min-height: 40px; border-radius: 9px; cursor: pointer; }
+.segmento button[aria-pressed="true"] { background: var(--surface); color: var(--text); box-shadow: 0 1px 3px rgba(0,0,0,.25); }
+
+/* Nova solicitação */
+.passos { display: flex; gap: .4rem; margin-bottom: 1rem; flex-wrap: wrap; }
+.passo { font-size: .82rem; font-weight: 700; color: var(--muted); padding: .3rem .7rem; border-radius: 999px; border: 1px solid var(--border); }
+.passo.ativo { color: var(--accent); border-color: var(--accent); background: var(--accent-soft); }
+.passo.feito { color: var(--ok); border-color: transparent; background: var(--ok-soft); }
+.opcoes { display: grid; gap: .6rem; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); }
+.opcao { text-align: left; background: var(--surface-2); border: 1px solid var(--border); border-radius: 12px; padding: .85rem .95rem; color: var(--text); font: inherit; cursor: pointer; }
+.opcao:hover { border-color: var(--muted); }
+.opcao[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); }
+.opcao strong { display: block; margin-bottom: .3rem; }
+.dias { display: flex; gap: .45rem; overflow-x: auto; padding-bottom: .4rem; }
+.dia { flex: 0 0 auto; min-width: 74px; text-align: center; border: 1px solid var(--border); background: var(--surface-2); color: var(--text); border-radius: 12px; padding: .5rem .4rem; cursor: pointer; font: inherit; }
+.dia b { display: block; font-size: 1.15rem; }
+.dia span { font-size: .75rem; color: var(--muted); text-transform: uppercase; }
+.dia[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); }
+.slots { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: .45rem; margin-top: .8rem; }
+.slot { min-height: 44px; border-radius: 10px; border: 1px solid var(--border); background: var(--surface-2); color: var(--text); font: inherit; font-weight: 700; cursor: pointer; }
+.slot[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+/* Tabela (vira cartões no celular) */
+.tabela { width: 100%; border-collapse: collapse; }
+.tabela th { text-align: left; font-size: .78rem; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); padding: .6rem; border-bottom: 1px solid var(--border); }
+.tabela td { padding: .7rem .6rem; border-bottom: 1px solid var(--border); vertical-align: top; }
+@media (max-width: 720px) {
+  .tabela thead { display: none; }
+  .tabela, .tabela tbody, .tabela tr, .tabela td { display: block; width: 100%; }
+  .tabela tr { background: var(--surface-2); border: 1px solid var(--border); border-radius: 12px; padding: .6rem .8rem; margin-bottom: .6rem; }
+  .tabela td { border: 0; padding: .2rem 0; }
+  .tabela td[data-l]::before { content: attr(data-l) ": "; color: var(--muted); font-size: .85rem; }
+}
+.filtros { display: grid; gap: .6rem; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); align-items: end; }
+.filtros label { margin-top: 0; }
+
+/* Escala semanal */
+.semana { display: grid; gap: .6rem; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); }
+.bloco { display: flex; justify-content: space-between; align-items: center; gap: .4rem; background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px; padding: .45rem .6rem; margin-top: .4rem; font-weight: 600; }
+
+/* Diálogo e aviso */
+.fundo { position: fixed; inset: 0; background: rgba(0,0,0,.55); display: grid; place-items: center; padding: 1rem; z-index: 50; }
+.dialogo { width: 100%; max-width: 480px; background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 1.2rem; box-shadow: var(--shadow); max-height: 90vh; overflow: auto; }
+.dialogo .acoes { display: flex; justify-content: flex-end; gap: .5rem; margin-top: 1.1rem; flex-wrap: wrap; }
+.notas { display: grid; grid-template-columns: repeat(5, 1fr); gap: .4rem; }
+.toast { position: fixed; left: 50%; bottom: 1.2rem; transform: translateX(-50%); background: var(--surface); border: 1px solid var(--border); box-shadow: var(--shadow); padding: .75rem 1.1rem; border-radius: 12px; z-index: 60; max-width: calc(100% - 2rem); font-weight: 600; }
+.toast.erro { border-color: var(--accent); }
+.demo-faixa { background: var(--warn-soft); color: var(--warn); text-align: center; font-size: .82rem; font-weight: 700; padding: .3rem 1rem; }
+footer { text-align: center; color: var(--muted); font-size: .8rem; padding: 1.5rem 1rem 2rem; }
+</style>
+</head>
+<body>
+<div id="faixa-demo" class="demo-faixa" hidden>Modo demonstração: dados fictícios, nada é gravado</div>
+<header>
+  <div class="bar">
+    <button class="icon-btn hamb" id="btn-menu" aria-label="Abrir menu" aria-expanded="false">☰</button>
+    <a class="brand" href="#inicio" aria-label="Início">
+      <span class="logo" aria-hidden="true">TT</span>
+      <span>Agenda da Coordenação<small>Faculdade Anhanguera Osasco</small></span>
+    </a>
+    <nav class="menu" id="menu" aria-label="Menu principal"></nav>
+    <div class="tools">
+      <div class="fontes" role="group" aria-label="Tamanho da fonte">
+        <button data-fonte="14" aria-label="Fonte menor">A−</button>
+        <button data-fonte="16" aria-label="Fonte normal">A</button>
+        <button data-fonte="19" aria-label="Fonte maior">A+</button>
+      </div>
+      <button class="icon-btn" id="btn-ouvir" aria-pressed="false" title="Ouvir o conteúdo da tela">🔊<span class="txt">Ouvir</span></button>
+      <button class="icon-btn" id="btn-tema" title="Alternar tema claro/escuro" aria-label="Alternar tema"></button>
+      <button class="icon-btn" id="btn-sair" hidden title="Sair">Sair</button>
+    </div>
+  </div>
+</header>
+<main id="conteudo" tabindex="-1"></main>
+<footer>Tech Titans · Faculdade Anhanguera Osasco · 2026</footer>
+<div id="camada"></div>
+
+<script>
+"use strict";
+/* =====================================================================
+   Utilidades
+   ===================================================================== */
+const $ = (s, el = document) => el.querySelector(s);
+const $$ = (s, el = document) => [...el.querySelectorAll(s)];
+const esc = v => String(v ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const pad = n => String(n).padStart(2, "0");
+const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+const isoDia = d => isoLocal(d).slice(0, 10);
+const parse = s => s ? new Date(s.length === 10 ? s + "T00:00" : s) : null;
+const SEMANA = ["dom", "seg", "ter", "qua", "qui", "sex", "sáb"];
+const DIAS_LONGOS = ["", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado", "Domingo"];
+const fmtData = s => { const d = parse(s); return d ? `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}` : ""; };
+const fmtHora = s => { const d = parse(s); return d ? `${pad(d.getHours())}:${pad(d.getMinutes())}` : ""; };
+const fmtQuando = s => { const d = parse(s); return d ? `${SEMANA[d.getDay()]}, ${pad(d.getDate())}/${pad(d.getMonth() + 1)} às ${fmtHora(s)}` : ""; };
+const store = {
+  get(k, def) { try { const v = localStorage.getItem(k); return v === null ? def : v; } catch { return def; } },
+  set(k, v) { try { localStorage.setItem(k, v); } catch { /* sem armazenamento: segue sem lembrar */ } },
+};
+
+function toast(msg, erro = false) {
+  const t = document.createElement("div");
+  t.className = "toast" + (erro ? " erro" : "");
+  t.setAttribute("role", "status");
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), 3800);
+}
+
+function dialogo(html, aoAbrir) {
+  const camada = $("#camada");
+  camada.innerHTML = `<div class="fundo"><div class="dialogo" role="dialog" aria-modal="true">${html}</div></div>`;
+  const fechar = () => { camada.innerHTML = ""; };
+  $(".fundo", camada).addEventListener("click", e => { if (e.target.classList.contains("fundo")) fechar(); });
+  $$("[data-fechar]", camada).forEach(b => b.addEventListener("click", fechar));
+  const primeiro = $("input, select, textarea, button", camada);
+  if (primeiro) primeiro.focus();
+  if (aoAbrir) aoAbrir($(".dialogo", camada), fechar);
+  return fechar;
+}
+
+function erroTexto(e) {
+  const d = e && e.detail;
+  if (!d) return "Não foi possível concluir. Tente de novo.";
+  if (typeof d === "string") return d;
+  if (Array.isArray(d)) return d.map(x => x.msg).join(" ");
+  return d.mensagem || JSON.stringify(d);
+}
+
+/* =====================================================================
+   API: servidor real ou modo demonstração (dados fictícios no navegador)
+   ===================================================================== */
+let DEMO = false;
+
+async function api(metodo, caminho, corpo) {
+  if (DEMO) return Mock.chamar(metodo, caminho, corpo);
+  const opt = { method: metodo, credentials: "same-origin", headers: {} };
+  if (corpo instanceof FormData) opt.body = corpo;
+  else if (corpo !== undefined) { opt.headers["Content-Type"] = "application/json"; opt.body = JSON.stringify(corpo); }
+  const r = await fetch(caminho, opt);
+  const dados = r.headers.get("content-type")?.includes("json") ? await r.json() : null;
+  if (!r.ok) throw { status: r.status, detail: dados?.detail ?? dados?.error ?? `Erro ${r.status}` };
+  return dados;
+}
+
+async function detectaModo() {
+  if (location.search.includes("demo")) return true;
+  try {
+    const r = await fetch("/api/saude", { credentials: "same-origin" });
+    return !r.ok;
+  } catch { return true; }
+}
+
+/* ---------- Modo demonstração ---------- */
+const Mock = (() => {
+  const agora = new Date();
+  const emDias = (d, h, m = 0) => { const x = new Date(agora); x.setDate(x.getDate() + d); x.setHours(h, m, 0, 0); return x; };
+  const SALA = "Bloco A, 2º andar, sala 204";
+  const st = {
+    user: null, seq: 100,
+    cursos: [{ id: 1, nome: "Análise e Desenvolvimento de Sistemas" }],
+    disciplinas: [{ id: 1, nome: "Banco de Dados" }, { id: 2, nome: "Engenharia de Software" }, { id: 3, nome: "Programação Web" }, { id: 4, nome: "Redes de Computadores" }],
+    documentos: [{ id: 1, nome: "Atestado médico" }, { id: 2, nome: "Histórico escolar" }, { id: 3, nome: "Ementas das disciplinas" }],
+    motivos: [
+      { id: 1, nome: "Entrega de atestado", destino: "COORDENACAO", atendimento: "ONLINE", duracao_min: null, prioridade: 2, data_limite: null, exige_disciplina: true, orientacao: "Anexe o atestado; não é preciso ir à coordenação.", ativo: true, documentos: [{ id: 1, nome: "Atestado médico", obrigatorio: true }] },
+      { id: 2, nome: "Nota, presença ou trabalho", destino: "COORDENACAO", atendimento: "PRESENCIAL", duracao_min: 20, prioridade: 1, data_limite: isoDia(emDias(10, 0)), exige_disciplina: true, orientacao: null, ativo: true, documentos: [] },
+      { id: 3, nome: "Reprovação e como refazer", destino: "COORDENACAO", atendimento: "PRESENCIAL", duracao_min: 30, prioridade: 2, data_limite: null, exige_disciplina: true, orientacao: null, ativo: true, documentos: [] },
+      { id: 4, nome: "Análise curricular (transferência)", destino: "COORDENACAO", atendimento: "PRESENCIAL", duracao_min: 60, prioridade: 3, data_limite: null, exige_disciplina: false, orientacao: "Leve o histórico e as ementas da outra instituição.", ativo: true, documentos: [{ id: 2, nome: "Histórico escolar", obrigatorio: false }, { id: 3, nome: "Ementas das disciplinas", obrigatorio: false }] },
+      { id: 5, nome: "Documentação de matrícula", destino: "SECRETARIA", atendimento: "PRESENCIAL", duracao_min: 15, prioridade: 2, data_limite: null, exige_disciplina: false, orientacao: "Esse assunto é com a secretaria acadêmica (Bloco B, térreo).", ativo: true, documentos: [] },
+      { id: 6, nome: "Pagamento e financeiro", destino: "SECRETARIA", atendimento: "PRESENCIAL", duracao_min: 15, prioridade: 2, data_limite: null, exige_disciplina: false, orientacao: "Esse assunto é com a secretaria ou o financeiro.", ativo: true, documentos: [] },
+    ],
+    escalas: [],
+    reservas: [],
+    minhasDisc: [1, 2, 3, 4],
+    ags: [],
+    notifs: [],
+  };
+  let idEsc = 1;
+  for (let d = 1; d <= 5; d++) {
+    st.escalas.push({ id: idEsc++, dia_semana: d, hora_inicio: "14:00", hora_fim: "18:00", local: SALA });
+    st.escalas.push({ id: idEsc++, dia_semana: d, hora_inicio: "18:30", hora_fim: "21:30", local: SALA });
+  }
+  const proxUtil = (n, h, m) => { let d = n, x; do { x = emDias(d, h, m); d++; } while (x.getDay() === 0 || x.getDay() === 6); return x; };
+  { const r = proxUtil(2, 12, 0); st.reservas.push({ id: 1, inicio: isoLocal(r), fim: isoLocal(new Date(r.getTime() + 90 * 60000)), motivo: "Reunião de colegiado" }); }
+  const mot = id => st.motivos.find(m => m.id === id);
+  const novoAg = (o) => {
+    const m = mot(o.motivo_id);
+    const ini = o.inicio ? new Date(o.inicio) : null;
+    return {
+      id: st.seq++, id_aluno: o.id_aluno, aluno: o.aluno, status: o.status, id_status: { Pendente: 1, Aprovada: 2, Recusada: 3, Cancelada: 4, Realizada: 5 }[o.status],
+      motivo: m.nome, id_motivo: m.id, atendimento: m.atendimento, disciplina: o.disciplina || null, titulo: o.titulo, descricao: o.descricao || null,
+      inicio: ini ? isoLocal(ini) : null, fim: ini ? isoLocal(new Date(ini.getTime() + (m.duracao_min || 30) * 60000)) : null,
+      local: ini ? SALA : null, gestor: "Prof.ª Marina Coordenadora", observacao: o.observacao || null, cancelado_por: null,
+      criado_em: isoLocal(o.criado || agora), avaliacao: null, anexos: o.anexos || [], prioridade: m.prioridade, data_limite: m.data_limite,
+    };
+  };
+  const LUCAS = { nome: "Lucas Andrade", ra: "1234567", email: "lucas@aluno.demo.edu", whatsapp: true };
+  const BEA = { nome: "Beatriz Lima", ra: "7654321", email: "beatriz@aluno.demo.edu", whatsapp: false };
+  st.ags.push(novoAg({ id_aluno: 1, aluno: LUCAS, status: "Aprovada", motivo_id: 2, disciplina: "Banco de Dados", titulo: "Nota da AV1 não apareceu", descricao: "Fiz a prova no dia 03/11 e a nota ainda não está no portal.", inicio: proxUtil(3, 14, 40) }));
+  st.ags.push(novoAg({ id_aluno: 1, aluno: LUCAS, status: "Realizada", motivo_id: 3, disciplina: "Redes de Computadores", titulo: "Como refazer Redes", inicio: emDias(-7, 19, 0), criado: emDias(-10, 10) }));
+  st.ags.push(novoAg({ id_aluno: 2, aluno: BEA, status: "Aprovada", motivo_id: 4, titulo: "Transferência da Uninove", descricao: "Quero saber quais disciplinas consigo aproveitar.", inicio: proxUtil(1, 19, 0) }));
+  st.ags.push(novoAg({ id_aluno: 2, aluno: BEA, status: "Pendente", motivo_id: 1, disciplina: "Programação Web", titulo: "Atestado de 10 e 11/11", criado: emDias(0, 9, 12), anexos: [{ id: 1, documento: "Atestado médico", arquivo: "atestado_beatriz.pdf" }] }));
+  st.ags.push(novoAg({ id_aluno: 3, aluno: { nome: "Rafael Souza", ra: "2223334", email: "rafael@aluno.demo.edu", whatsapp: true }, status: "Pendente", motivo_id: 1, disciplina: "Banco de Dados", titulo: "Atestado médico — 12/11", criado: emDias(0, 11, 40), anexos: [{ id: 2, documento: "Atestado médico", arquivo: "atestado.jpg" }] }));
+  st.notifs.push({ id: 1, id_aluno: 1, mensagem: `Reunião confirmada: ${fmtQuando(st.ags[0].inicio)}, ${SALA}, com Prof.ª Marina Coordenadora.`, lida: false, criada_em: isoLocal(emDias(0, 8)) });
+  st.notifs.push({ id: 2, id_aluno: 1, mensagem: "Reunião realizada com sucesso. Avalie o atendimento de 1 a 10.", lida: false, criada_em: isoLocal(emDias(-7, 19, 35)) });
+
+  const erro = (status, detail) => { throw { status, detail }; };
+  const exige = perfil => { if (!st.user) erro(401, "Faça login para continuar."); if (perfil && st.user.perfil !== perfil) erro(403, "Acesso negado."); };
+  const sobrepoe = (a0, a1, b0, b1) => a0 < b1 && b0 < a1;
+  const avisa = (ag, msg) => st.notifs.unshift({ id: st.seq++, id_aluno: ag.id_aluno, mensagem: msg, lida: false, criada_em: isoLocal(new Date()) });
+
+  function livres(m) {
+    const dur = (m.duracao_min || 30) * 60000, passo = (m.duracao_min <= 30 ? m.duracao_min : 30) * 60000;
+    const de = new Date(Date.now() + 24 * 3600000), dias = [];
+    const bloq = [...st.reservas.map(r => [new Date(r.inicio), new Date(r.fim)]),
+      ...st.ags.filter(a => a.status === "Aprovada" && a.inicio).map(a => [new Date(a.inicio), new Date(a.fim)])];
+    for (let i = 0; i < 21; i++) {
+      const dia = new Date(de); dia.setDate(dia.getDate() + i); dia.setHours(0, 0, 0, 0);
+      const dow = dia.getDay() === 0 ? 7 : dia.getDay(), hs = [];
+      st.escalas.filter(e => e.dia_semana === dow).forEach(e => {
+        const [h0, m0] = e.hora_inicio.split(":").map(Number), [h1, m1] = e.hora_fim.split(":").map(Number);
+        let t = new Date(dia); t.setHours(h0, m0);
+        const fim = new Date(dia); fim.setHours(h1, m1);
+        while (t.getTime() + dur <= fim.getTime()) {
+          const tf = new Date(t.getTime() + dur);
+          if (t >= de && !bloq.some(([b0, b1]) => sobrepoe(t, tf, b0, b1)))
+            hs.push({ inicio: isoLocal(t), fim: isoLocal(tf), gestor_id: 1, gestor: "Prof.ª Marina Coordenadora", local: e.local });
+          t = new Date(t.getTime() + passo);
+        }
+      });
+      if (hs.length) dias.push({ data: isoDia(dia), horarios: hs.sort((a, b) => a.inicio.localeCompare(b.inicio)) });
+    }
+    return dias;
+  }
+
+  async function chamar(metodo, caminho, corpo) {
+    await new Promise(r => setTimeout(r, 120));
+    const url = new URL(caminho, "http://x"), p = url.pathname, q = url.searchParams;
+    const json = corpo instanceof FormData ? Object.fromEntries(corpo.entries()) : (corpo || {});
+    const id = Number((p.match(/\/(\d+)(\/|$)/) || [])[1]);
+    const ag = st.ags.find(a => a.id === id);
+    const meus = () => st.ags.filter(a => a.id_aluno === st.user.id);
+    const R = `${metodo} ${p.replace(/\/\d+/g, "/:id")}`;
+    switch (R) {
+      case "GET /api/me": exige(); return st.user;
+      case "POST /api/login": {
+        const aluno = { "1234567": [1, "Lucas Andrade"], "lucas@aluno.demo.edu": [1, "Lucas Andrade"], "7654321": [2, "Beatriz Lima"] };
+        if (json.perfil === "coordenador" && json.login.toLowerCase() === "coordenacao@demo.edu" && json.senha === "Coord2026!")
+          return st.user = { id: 1, perfil: "coordenador", nome: "Prof.ª Marina Coordenadora" };
+        if (json.perfil === "aluno" && aluno[json.login] && json.senha === "Aluno2026!")
+          return st.user = { id: aluno[json.login][0], perfil: "aluno", nome: aluno[json.login][1] };
+        erro(401, "RA/e-mail ou senha incorretos. Na demonstração: RA 1234567 / Aluno2026! ou coordenacao@demo.edu / Coord2026!");
+      }
+      case "POST /api/logout": st.user = null; return { ok: true };
+      case "POST /api/alunos": return st.user = { id: 9, perfil: "aluno", nome: json.nome };
+      case "GET /api/cursos": return st.cursos;
+      case "GET /api/disciplinas": return st.disciplinas;
+      case "GET /api/documentos": return st.documentos;
+      case "GET /api/motivos": exige(); return q.get("todos") ? st.motivos : st.motivos.filter(m => m.ativo);
+      case "POST /api/motivos": exige("coordenador"); { const m = { ...json, id: st.seq++, documentos: (json.documentos || []).map(d => ({ ...d, nome: st.documentos.find(x => x.id === d.id).nome })) }; st.motivos.push(m); return m; }
+      case "PUT /api/motivos/:id": exige("coordenador"); { const i = st.motivos.findIndex(m => m.id === id); st.motivos[i] = { ...json, id, documentos: (json.documentos || []).map(d => ({ ...d, nome: st.documentos.find(x => x.id === d.id).nome })) }; return st.motivos[i]; }
+      case "GET /api/horarios/livres": exige("aluno"); return livres(mot(Number(q.get("id_motivo"))));
+      case "POST /api/agendamentos": {
+        exige("aluno");
+        const m = mot(Number(json.id_motivo));
+        if (m.destino === "SECRETARIA") erro(422, m.orientacao);
+        if (m.atendimento === "PRESENCIAL" && meus().some(a => a.status === "Aprovada" && new Date(a.inicio) > new Date()))
+          erro(422, "Você já tem uma reunião marcada. Cancele-a para marcar outra.");
+        const disc = st.disciplinas.find(d => d.id === Number(json.id_disciplina));
+        const anexos = corpo instanceof FormData ? corpo.getAll("arquivos").map((f, i) => ({ id: st.seq++, documento: st.documentos.find(d => d.id === Number(corpo.getAll("documentos")[i]))?.nome, arquivo: f.name })) : [];
+        const novo = novoAg({ id_aluno: st.user.id, aluno: { nome: st.user.nome, ra: "1234567", email: "lucas@aluno.demo.edu", whatsapp: true }, status: m.atendimento === "ONLINE" ? "Pendente" : "Aprovada", motivo_id: m.id, disciplina: disc?.nome, titulo: json.titulo, descricao: json.descricao, inicio: json.inicio || null, anexos });
+        st.ags.unshift(novo);
+        avisa(novo, novo.status === "Aprovada" ? `Reunião confirmada: ${fmtQuando(novo.inicio)}, ${novo.local}.` : `Pedido recebido: ${m.nome}.`);
+        return novo;
+      }
+      case "GET /api/agendamentos/meus": exige("aluno"); {
+        const t = (q.get("q") || "").toLowerCase();
+        return meus().filter(a => !t || (a.titulo + " " + (a.descricao || "")).toLowerCase().includes(t));
+      }
+      case "PATCH /api/agendamentos/:id/cancelar": exige();
+        if (st.user.perfil === "aluno") { ag.cancelado_por = "ALUNO"; ag.observacao = "Cancelada pelo aluno"; }
+        else { ag.cancelado_por = "GESTOR"; ag.observacao = "Cancelada pelo coordenador: " + (json.motivo || "imprevisto"); avisa(ag, `Sua reunião de ${fmtQuando(ag.inicio)} foi cancelada pelo coordenador.`); }
+        ag.status = "Cancelada"; ag.id_status = 4; return ag;
+      case "POST /api/agendamentos/:id/avaliacao": exige("aluno"); ag.avaliacao = { nota: json.nota, comentario: json.comentario }; return { ok: true };
+      case "GET /api/agenda": exige("coordenador"); {
+        const ini = q.get("inicio"), fim = q.get("fim"), sts = Number(q.get("id_status")), mo = Number(q.get("id_motivo")), t = (q.get("q") || "").toLowerCase();
+        return st.ags.filter(a => {
+          const quando = (a.inicio || a.criado_em).slice(0, 10);
+          return (!ini || quando >= ini) && (!fim || quando <= fim) && (!sts || a.id_status === sts) && (!mo || a.id_motivo === mo)
+            && (!t || (a.titulo + " " + (a.descricao || "")).toLowerCase().includes(t));
+        }).sort((a, b) => (a.inicio || a.criado_em).localeCompare(b.inicio || b.criado_em));
+      }
+      case "GET /api/pendentes": exige("coordenador");
+        return st.ags.filter(a => a.status === "Pendente").sort((a, b) => (a.data_limite || "9").localeCompare(b.data_limite || "9") || a.prioridade - b.prioridade || a.criado_em.localeCompare(b.criado_em));
+      case "PATCH /api/agendamentos/:id/decisao": exige("coordenador");
+        ag.status = json.aceitar ? "Aprovada" : "Recusada"; ag.id_status = json.aceitar ? 2 : 3; ag.observacao = json.observacao || null;
+        avisa(ag, `Seu pedido "${ag.titulo}" foi ${json.aceitar ? "aceito" : "recusado"}.`); return ag;
+      case "PATCH /api/agendamentos/:id/realizada": exige("coordenador");
+        if (new Date(ag.inicio) > new Date()) erro(422, "A reunião ainda não começou.");
+        ag.status = "Realizada"; ag.id_status = 5; return ag;
+      case "GET /api/agendamentos/:id/whatsapp": exige("coordenador");
+        if (!ag.aluno.whatsapp) erro(422, "O aluno não autorizou contato por WhatsApp.");
+        return { link: `https://wa.me/5511999990000?text=${encodeURIComponent(`Olá, ${ag.aluno.nome.split(" ")[0]}! Sobre seu pedido "${ag.titulo}": `)}` };
+      case "GET /api/notificacoes": exige("aluno"); return st.notifs.filter(n => n.id_aluno === st.user.id).slice(0, 20);
+      case "PATCH /api/notificacoes/lidas": exige("aluno"); st.notifs.forEach(n => { if (n.id_aluno === st.user.id) n.lida = true; }); return { ok: true };
+      case "GET /api/escalas": exige("coordenador"); return [...st.escalas].sort((a, b) => a.dia_semana - b.dia_semana || a.hora_inicio.localeCompare(b.hora_inicio));
+      case "POST /api/escalas": exige("coordenador");
+        if (st.escalas.some(e => e.dia_semana === Number(json.dia_semana) && json.hora_inicio < e.hora_fim && e.hora_inicio < json.hora_fim)) erro(409, "Esse bloco se sobrepõe a outro do mesmo dia.");
+        { const e = { id: idEsc++, ...json, dia_semana: Number(json.dia_semana) }; st.escalas.push(e); return e; }
+      case "DELETE /api/escalas/:id": exige("coordenador"); st.escalas = st.escalas.filter(e => e.id !== id); return { ok: true };
+      case "GET /api/minhas-disciplinas": exige("coordenador"); return { max: 6, disciplinas: st.disciplinas.filter(d => st.minhasDisc.includes(d.id)) };
+      case "PUT /api/minhas-disciplinas": exige("coordenador"); st.minhasDisc = json.ids; return { ok: true };
+      case "GET /api/reservas": exige("coordenador"); return st.reservas.filter(r => new Date(r.fim) >= new Date());
+      case "POST /api/reservas": exige("coordenador"); {
+        const i0 = new Date(json.inicio), i1 = new Date(json.fim);
+        const afetadas = st.ags.filter(a => a.status === "Aprovada" && a.inicio && sobrepoe(new Date(a.inicio), new Date(a.fim), i0, i1));
+        if (afetadas.length && !json.confirmar)
+          erro(409, { mensagem: `${afetadas.length} reunião(ões) marcada(s) nesse período.`, reunioes: afetadas.map(a => ({ id: a.id, aluno: a.aluno.nome, inicio: a.inicio })) });
+        const r = { id: st.seq++, inicio: json.inicio, fim: json.fim, motivo: json.motivo };
+        st.reservas.push(r);
+        afetadas.forEach(a => { a.status = "Cancelada"; a.id_status = 4; a.cancelado_por = "GESTOR"; a.observacao = "Cancelada pelo coordenador: " + json.motivo; avisa(a, `Sua reunião de ${fmtQuando(a.inicio)} foi cancelada pelo coordenador (${json.motivo}). Escolha outro horário.`); });
+        return { id: r.id, canceladas: afetadas.length };
+      }
+      case "DELETE /api/reservas/:id": exige("coordenador"); st.reservas = st.reservas.filter(r => r.id !== id); return { ok: true };
+    }
+    erro(404, "Rota não encontrada no modo demonstração: " + R);
+  }
+  return { chamar };
+})();
+
+/* =====================================================================
+   Estado, preferências e acessibilidade
+   ===================================================================== */
+let USER = null;
+
+function aplicaTema(t) {
+  document.documentElement.dataset.theme = t;
+  $("#btn-tema").textContent = t === "dark" ? "☀️" : "🌙";
+  $("#btn-tema").title = t === "dark" ? "Usar tema claro" : "Usar tema escuro";
+  store.set("tema", t);
+}
+function aplicaFonte(px) {
+  document.documentElement.style.fontSize = px + "px";
+  $$(".fontes button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.fonte === String(px))));
+  store.set("fonte", px);
+}
+$("#btn-tema").addEventListener("click", () => aplicaTema(document.documentElement.dataset.theme === "dark" ? "light" : "dark"));
+$$(".fontes button").forEach(b => b.addEventListener("click", () => aplicaFonte(b.dataset.fonte)));
+$("#btn-menu").addEventListener("click", () => {
+  const m = $("#menu"), aberto = m.classList.toggle("aberto");
+  $("#btn-menu").setAttribute("aria-expanded", String(aberto));
+});
+$("#btn-ouvir").addEventListener("click", () => {
+  const b = $("#btn-ouvir");
+  if (!("speechSynthesis" in window)) return toast("Seu navegador não tem leitura em voz alta.", true);
+  if (speechSynthesis.speaking) { speechSynthesis.cancel(); b.setAttribute("aria-pressed", "false"); return; }
+  const fala = new SpeechSynthesisUtterance($("#conteudo").innerText.replace(/\s+/g, " ").slice(0, 4000));
+  fala.lang = "pt-BR";
+  fala.onend = () => b.setAttribute("aria-pressed", "false");
+  b.setAttribute("aria-pressed", "true");
+  speechSynthesis.speak(fala);
+});
+$("#btn-sair").addEventListener("click", async () => {
+  await api("POST", "/api/logout").catch(() => {});
+  USER = null; ir("login");
+});
+
+/* =====================================================================
+   Rotas (#login, #cadastro, #meus, #nova, #agenda, #reunioes, #escala, #motivos)
+   ===================================================================== */
+const MENUS = {
+  aluno: [["meus", "Meus pedidos"], ["nova", "Nova solicitação"]],
+  coordenador: [["agenda", "Agenda"], ["reunioes", "Reuniões"], ["escala", "Escala"], ["motivos", "Motivos"]],
+};
+const VIEWS = {};
+function ir(rota) { if (location.hash.slice(1) === rota) render(); else location.hash = rota; }
+
+async function render() {
+  speechSynthesis?.cancel?.();
+  let rota = location.hash.slice(1) || "inicio";
+  if (!USER && !["login", "cadastro"].includes(rota)) rota = "login";
+  if (USER && ["login", "cadastro", "inicio"].includes(rota)) rota = USER.perfil === "aluno" ? "meus" : "agenda";
+  if (USER && !MENUS[USER.perfil].some(([r]) => r === rota)) rota = MENUS[USER.perfil][0][0];
+  const menu = $("#menu");
+  menu.innerHTML = USER ? MENUS[USER.perfil].map(([r, t]) => `<a href="#${r}" class="${r === rota ? "ativo" : ""}" ${r === rota ? 'aria-current="page"' : ""}>${t}</a>`).join("") : "";
+  menu.classList.remove("aberto");
+  $("#btn-sair").hidden = !USER;
+  $("#btn-menu").hidden = !USER;
+  const main = $("#conteudo");
+  main.innerHTML = `<div class="vazio">Carregando…</div>`;
+  try { await VIEWS[rota](main); }
+  catch (e) {
+    if (e.status === 401) { USER = null; return ir("login"); }
+    main.innerHTML = `<div class="alerta erro">${esc(erroTexto(e))}</div>`;
+  }
+  main.focus({ preventScroll: true });
+}
+window.addEventListener("hashchange", render);
+
+/* ---------- Login ---------- */
+VIEWS.login = async main => {
+  let perfil = store.get("perfil", "aluno");
+  main.innerHTML = `
+  <div class="login-wrap"><div class="login">
+    <div class="hero"><div class="logo" aria-hidden="true">TT</div>
+      <h1>Agenda da Coordenação</h1><p class="muted mb0">Marque seu atendimento com a coordenação do curso.</p></div>
+    <form class="card" id="f-login" novalidate>
+      <div class="segmento" role="group" aria-label="Entrar como">
+        <button type="button" data-p="aluno">Sou aluno</button><button type="button" data-p="coordenador">Sou coordenador</button>
+      </div>
+      <label for="l-login" id="l-rot"></label>
+      <input id="l-login" autocomplete="username" required>
+      <label for="l-senha">Senha</label>
+      <input id="l-senha" type="password" autocomplete="current-password" required>
+      <div id="l-erro" class="alerta erro mt" hidden></div>
+      <button class="btn btn-primary btn-block mt" type="submit">Entrar</button>
+      <p class="small muted mt mb0" id="l-extra"></p>
+    </form>
+    ${DEMO ? `<div class="alerta info mt small"><b>Demonstração:</b> aluno <b>1234567</b> / <b>Aluno2026!</b> · coordenador <b>coordenacao@demo.edu</b> / <b>Coord2026!</b></div>` : ""}
+  </div></div>`;
+  const marca = () => {
+    $$(".segmento button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.p === perfil)));
+    $("#l-rot").textContent = perfil === "aluno" ? "RA ou e-mail" : "E-mail institucional";
+    $("#l-extra").innerHTML = perfil === "aluno" ? `Primeiro acesso? <a href="#cadastro">Criar conta</a>` : "O acesso do coordenador é criado pela instituição.";
+  };
+  $$(".segmento button").forEach(b => b.addEventListener("click", () => { perfil = b.dataset.p; store.set("perfil", perfil); marca(); }));
+  marca();
+  $("#f-login").addEventListener("submit", async e => {
+    e.preventDefault();
+    const btn = $("button[type=submit]", e.target); btn.disabled = true;
+    try {
+      USER = await api("POST", "/api/login", { perfil, login: $("#l-login").value.trim(), senha: $("#l-senha").value });
+      ir(USER.perfil === "aluno" ? "meus" : "agenda");
+    } catch (er) { $("#l-erro").hidden = false; $("#l-erro").textContent = erroTexto(er); btn.disabled = false; }
+  });
+};
+VIEWS.inicio = VIEWS.login;
+
+/* ---------- Cadastro ---------- */
+VIEWS.cadastro = async main => {
+  const cursos = await api("GET", "/api/cursos");
+  main.innerHTML = `
+  <div class="login-wrap"><form class="card login" id="f-cad" novalidate>
+    <h1>Criar conta</h1><p class="muted">Use o RA e o e-mail da faculdade.</p>
+    <label for="c-nome">Nome completo</label><input id="c-nome" required maxlength="100" autocomplete="name">
+    <label for="c-ra">RA</label><input id="c-ra" required inputmode="numeric" maxlength="20" placeholder="Somente números">
+    <label for="c-email">E-mail</label><input id="c-email" type="email" required autocomplete="email">
+    <label for="c-curso">Curso</label><select id="c-curso">${cursos.map(c => `<option value="${c.id}">${esc(c.nome)}</option>`).join("")}</select>
+    <label for="c-cel">Celular (opcional)</label><input id="c-cel" inputmode="tel" placeholder="(11) 99999-0000" maxlength="15">
+    <label class="check"><input type="checkbox" id="c-wpp"> Aceito receber respostas da coordenação por WhatsApp</label>
+    <label for="c-senha">Senha</label><input id="c-senha" type="password" minlength="8" required autocomplete="new-password" placeholder="Mínimo 8 caracteres, com letras e números">
+    <label class="check"><input type="checkbox" id="c-lgpd"> Li e aceito que meus dados (nome, RA, e-mail e curso) sejam usados só para agendar atendimentos, conforme a LGPD.</label>
+    <div id="c-erro" class="alerta erro mt" hidden></div>
+    <button class="btn btn-primary btn-block mt" type="submit">Criar conta</button>
+    <p class="small muted mt mb0">Já tem conta? <a href="#login">Entrar</a></p>
+  </form></div>`;
+  const cel = $("#c-cel");
+  cel.addEventListener("input", () => {   // máscara de celular (RNF19)
+    const d = cel.value.replace(/\D/g, "").slice(0, 11);
+    cel.value = d.length > 6 ? `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}` : d.length > 2 ? `(${d.slice(0, 2)}) ${d.slice(2)}` : d;
+  });
+  $("#c-ra").addEventListener("input", e => { e.target.value = e.target.value.replace(/\D/g, ""); });
+  $("#f-cad").addEventListener("submit", async e => {
+    e.preventDefault();
+    const err = $("#c-erro");
+    if (!$("#c-lgpd").checked) { err.hidden = false; err.textContent = "Para criar a conta, aceite o uso dos dados (LGPD)."; return; }
+    try {
+      USER = await api("POST", "/api/alunos", {
+        nome: $("#c-nome").value.trim(), ra: $("#c-ra").value, email: $("#c-email").value.trim(), id_curso: Number($("#c-curso").value),
+        senha: $("#c-senha").value, celular: cel.value || null, aceita_whatsapp: $("#c-wpp").checked, aceite_lgpd: true,
+      });
+      toast("Conta criada. Bem-vindo(a)!"); ir("meus");
+    } catch (er) { err.hidden = false; err.textContent = erroTexto(er); }
+  });
+};
+
+/* ---------- Aluno: Meus pedidos ---------- */
+const badge = s => `<span class="badge b-${esc(s)}">${esc(s === "Aprovada" ? "Confirmada" : s)}</span>`;
+
+VIEWS.meus = async main => {
+  const [ags, notifs] = await Promise.all([api("GET", "/api/agendamentos/meus"), api("GET", "/api/notificacoes")]);
+  const novas = notifs.filter(n => !n.lida);
+  const futuras = ags.filter(a => a.status === "Aprovada" && a.inicio && parse(a.inicio) > new Date());
+  const proxima = futuras.sort((a, b) => a.inicio.localeCompare(b.inicio))[0];
+  main.innerHTML = `
+  <div class="topo"><div><h1>Olá, ${esc(USER.nome.split(" ")[0])}</h1><p class="muted mb0">Seus atendimentos com a coordenação.</p></div>
+    <a class="btn btn-primary" href="#nova">＋ Nova solicitação</a></div>
+  ${novas.length ? `<div class="alerta info" role="status"><div class="row"><b>🔔 ${novas.length} aviso(s) novo(s)</b><span class="spacer"></span><button class="btn btn-ghost btn-sm" id="b-lidas">Marcar como lidos</button></div>
+    <ul class="small" style="margin:.5rem 0 0;padding-left:1.2rem">${novas.map(n => `<li>${esc(n.mensagem)}</li>`).join("")}</ul></div>` : ""}
+  ${proxima ? `<section class="card mt" style="border-color:var(--accent)" aria-label="Próxima reunião">
+    <span class="badge b-accent">Próxima reunião</span>
+    <div class="data-grande mt">${esc(fmtQuando(proxima.inicio))} – ${fmtHora(proxima.fim)}</div>
+    <div class="meta"><span>📍 ${esc(proxima.local)}</span><span>👤 ${esc(proxima.gestor)}</span><span>🏷️ ${esc(proxima.motivo)}</span></div></section>` : ""}
+  <div class="secao row"><h2 class="mb0">Histórico</h2><span class="spacer"></span>
+    <label class="sr-only" for="busca">Buscar</label><input id="busca" placeholder="Buscar por palavra-chave" style="max-width:280px"></div>
+  <div id="lista" class="mt"></div>`;
+  const desenha = lista => {
+    $("#lista").innerHTML = lista.length ? lista.map(a => `
+      <article class="card ag-card">
+        <div class="cab"><div><h3>${esc(a.titulo)}</h3><div class="small muted">${esc(a.motivo)}${a.disciplina ? " · " + esc(a.disciplina) : ""}</div></div>${badge(a.status)}</div>
+        <div class="meta">${a.inicio ? `<span>📅 ${esc(fmtQuando(a.inicio))}</span><span>📍 ${esc(a.local)}</span>` : `<span>💻 Pedido online · enviado em ${esc(fmtData(a.criado_em))}</span>`}
+          ${a.anexos.length ? `<span>📎 ${a.anexos.map(x => esc(x.arquivo)).join(", ")}</span>` : ""}</div>
+        ${a.observacao ? `<div class="small mt"><b>Observação:</b> ${esc(a.observacao)}</div>` : ""}
+        ${a.avaliacao ? `<div class="small muted">Sua nota: <b>${a.avaliacao.nota}</b>/10</div>` : ""}
+        <div class="acoes">
+          ${["Pendente", "Aprovada"].includes(a.status) && (!a.inicio || parse(a.inicio) > new Date()) ? `<button class="btn btn-danger btn-sm" data-cancelar="${a.id}">Cancelar</button>` : ""}
+          ${a.status === "Realizada" && !a.avaliacao ? `<button class="btn btn-primary btn-sm" data-avaliar="${a.id}">Avaliar de 1 a 10</button>` : ""}
+          ${a.status === "Cancelada" && a.cancelado_por === "GESTOR" ? `<a class="btn btn-sm" href="#nova">Escolher outro horário</a>` : ""}
+        </div>
+      </article>`).join("") : `<div class="card vazio">Nenhum pedido ainda. Toque em <b>Nova solicitação</b> para marcar seu primeiro atendimento.</div>`;
+    $$("[data-cancelar]").forEach(b => b.addEventListener("click", () => confirmaCancelar(Number(b.dataset.cancelar))));
+    $$("[data-avaliar]").forEach(b => b.addEventListener("click", () => avaliar(Number(b.dataset.avaliar))));
+  };
+  desenha(ags);
+  let t;
+  $("#busca").addEventListener("input", e => { clearTimeout(t); t = setTimeout(async () => desenha(await api("GET", "/api/agendamentos/meus?q=" + encodeURIComponent(e.target.value))), 250); });
+  $("#b-lidas")?.addEventListener("click", async () => { await api("PATCH", "/api/notificacoes/lidas"); render(); });
+};
+
+function confirmaCancelar(id) {
+  dialogo(`<h2>Cancelar este pedido?</h2><p class="muted">O horário volta a ficar livre para outros alunos.</p>
+    <div class="acoes"><button class="btn" data-fechar>Voltar</button><button class="btn btn-primary" id="ok">Cancelar pedido</button></div>`,
+  (d, fechar) => $("#ok", d).addEventListener("click", async () => {
+    try { await api("PATCH", `/api/agendamentos/${id}/cancelar`, {}); fechar(); toast("Pedido cancelado."); render(); }
+    catch (e) { fechar(); toast(erroTexto(e), true); }
+  }));
+}
+
+function avaliar(id) {
+  let nota = 0;
+  dialogo(`<h2>Como foi o atendimento?</h2><p class="muted">Escolha uma nota de 1 a 10.</p>
+    <div class="notas" role="group" aria-label="Nota">${[...Array(10)].map((_, i) => `<button class="slot" data-n="${i + 1}" aria-pressed="false">${i + 1}</button>`).join("")}</div>
+    <label for="av-com">Comentário (opcional)</label><textarea id="av-com" maxlength="500"></textarea>
+    <div class="acoes"><button class="btn" data-fechar>Agora não</button><button class="btn btn-primary" id="ok" disabled>Enviar avaliação</button></div>`,
+  (d, fechar) => {
+    $$("[data-n]", d).forEach(b => b.addEventListener("click", () => {
+      nota = Number(b.dataset.n); $$("[data-n]", d).forEach(x => x.setAttribute("aria-pressed", String(x === b))); $("#ok", d).disabled = false;
+    }));
+    $("#ok", d).addEventListener("click", async () => {
+      try { await api("POST", `/api/agendamentos/${id}/avaliacao`, { nota, comentario: $("#av-com", d).value || null }); fechar(); toast("Obrigado pela avaliação!"); render(); }
+      catch (e) { toast(erroTexto(e), true); }
+    });
+  });
+}
+
+/* ---------- Aluno: Nova solicitação ---------- */
+VIEWS.nova = async main => {
+  const [motivos, disciplinas] = await Promise.all([api("GET", "/api/motivos"), api("GET", "/api/disciplinas")]);
+  const s = { motivo: null, disciplina: null, dia: null, horario: null, livres: [] };
+  main.innerHTML = `
+  <div class="topo"><div><h1>Nova solicitação</h1><p class="muted mb0">A reunião é confirmada na hora, sem esperar aprovação.</p></div></div>
+  <div class="passos" aria-hidden="true"><span class="passo" data-p="1">1 · Motivo</span><span class="passo" data-p="2">2 · Detalhes</span><span class="passo" data-p="3">3 · Horário</span><span class="passo" data-p="4">4 · Confirmar</span></div>
+  <section class="card"><h2>Qual é o assunto?</h2><div class="opcoes" id="motivos" role="group" aria-label="Motivo do contato">
+    ${motivos.map(m => `<button class="opcao" data-m="${m.id}" aria-pressed="false"><strong>${esc(m.nome)}</strong>
+      <span class="row">${m.destino === "SECRETARIA" ? `<span class="badge b-neutro">Secretaria</span>` : m.atendimento === "ONLINE" ? `<span class="badge b-Realizada">Online, sem reunião</span>` : `<span class="badge b-accent">${m.duracao_min} min · presencial</span>`}</span></button>`).join("")}
+  </div></section>
+  <div id="resto"></div>`;
+  const passo = n => $$(".passo").forEach(p => { const i = Number(p.dataset.p); p.className = "passo" + (i < n ? " feito" : i === n ? " ativo" : ""); });
+  passo(1);
+
+  $$("[data-m]").forEach(b => b.addEventListener("click", () => {
+    s.motivo = motivos.find(m => m.id === Number(b.dataset.m)); s.dia = s.horario = null;
+    $$("[data-m]").forEach(x => x.setAttribute("aria-pressed", String(x === b)));
+    desenhaResto();
+  }));
+
+  async function desenhaResto() {
+    const m = s.motivo, resto = $("#resto");
+    if (m.destino === "SECRETARIA") {
+      passo(1);
+      resto.innerHTML = `<div class="alerta warn mt" role="alert"><b>Esse assunto não é com a coordenação.</b><br>${esc(m.orientacao || "Procure a secretaria acadêmica.")}</div>`;
+      return;
+    }
+    passo(2);
+    const docs = m.documentos || [];
+    resto.innerHTML = `
+    <section class="card mt"><h2>Detalhes</h2>
+      ${m.orientacao ? `<div class="alerta info small">${esc(m.orientacao)}</div>` : ""}
+      ${m.exige_disciplina ? `<label for="n-disc">Disciplina</label><select id="n-disc"><option value="">Escolha…</option>${disciplinas.map(d => `<option value="${d.id}">${esc(d.nome)}</option>`).join("")}</select>` : ""}
+      <label for="n-tit">Título</label><input id="n-tit" maxlength="100" placeholder="Ex.: Nota da AV1 não apareceu">
+      <label for="n-desc">Descrição (opcional)</label><textarea id="n-desc" maxlength="500" placeholder="Conte em poucas linhas o que precisa."></textarea>
+      ${docs.length ? `<h3 class="mt">Documentos</h3>${docs.map(d => `<label for="doc-${d.id}">${esc(d.nome)} ${d.obrigatorio ? `<span class="badge b-accent">obrigatório</span>` : `<span class="badge b-neutro">opcional</span>`}</label>
+        <input type="file" id="doc-${d.id}" data-doc="${d.id}" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png">`).join("")}<p class="small muted">PDF, JPG ou PNG de até 5 MB.</p>` : ""}
+    </section>
+    ${m.atendimento === "PRESENCIAL" ? `<section class="card mt"><h2>Escolha o dia e o horário</h2><p class="small muted" id="h-info">Carregando horários livres…</p><div class="dias" id="dias" role="group" aria-label="Dia"></div><div class="slots" id="slots" role="group" aria-label="Horário"></div></section>` : ""}
+    <div id="h-erro" class="alerta erro mt" hidden></div>
+    <div class="row mt"><span class="spacer"></span><button class="btn btn-primary" id="enviar">${m.atendimento === "ONLINE" ? "Enviar pedido" : "Confirmar reunião"}</button></div>`;
+    $("#enviar").addEventListener("click", enviar);
+    if (m.atendimento === "PRESENCIAL") {
+      const carrega = async () => {
+        const disc = $("#n-disc")?.value;
+        s.livres = await api("GET", `/api/horarios/livres?id_motivo=${m.id}${disc ? "&id_disciplina=" + disc : ""}`);
+        s.dia = s.livres[0]?.data || null; s.horario = null;
+        desenhaHorarios();
+      };
+      $("#n-disc")?.addEventListener("change", carrega);
+      await carrega();
+    }
+  }
+
+  function desenhaHorarios() {
+    const m = s.motivo;
+    $("#h-info").textContent = s.livres.length ? `Reuniões de ${m.duracao_min} min com a coordenação do seu curso. Horários com pelo menos 24 h de antecedência.`
+      : "Não há horários livres nos próximos dias. Tente mais tarde.";
+    $("#dias").innerHTML = s.livres.map(d => { const x = parse(d.data); return `<button class="dia" data-d="${d.data}" aria-pressed="${d.data === s.dia}"><span>${SEMANA[x.getDay()]}</span><b>${pad(x.getDate())}</b><span>${pad(x.getMonth() + 1)}/${String(x.getFullYear()).slice(2)}</span></button>`; }).join("");
+    const dia = s.livres.find(d => d.data === s.dia);
+    $("#slots").innerHTML = dia ? dia.horarios.map((h, i) => `<button class="slot" data-i="${i}" aria-pressed="${s.horario === h}">${fmtHora(h.inicio)}</button>`).join("") : "";
+    $$("[data-d]").forEach(b => b.addEventListener("click", () => { s.dia = b.dataset.d; s.horario = null; desenhaHorarios(); }));
+    $$("[data-i]").forEach(b => b.addEventListener("click", () => { s.horario = dia.horarios[Number(b.dataset.i)]; desenhaHorarios(); passo(4); }));
+    if (!s.horario) passo(3);
+  }
+
+  async function enviar() {
+    const m = s.motivo, err = $("#h-erro");
+    const falha = t => { err.hidden = false; err.textContent = t; err.scrollIntoView({ behavior: "smooth", block: "center" }); };
+    const titulo = $("#n-tit").value.trim();
+    if (m.exige_disciplina && !$("#n-disc").value) return falha("Escolha a disciplina.");
+    if (titulo.length < 3) return falha("Escreva um título com pelo menos 3 letras.");
+    const fd = new FormData();
+    fd.append("id_motivo", m.id); fd.append("titulo", titulo);
+    if ($("#n-desc").value.trim()) fd.append("descricao", $("#n-desc").value.trim());
+    if (m.exige_disciplina) fd.append("id_disciplina", $("#n-disc").value);
+    for (const inp of $$("[data-doc]")) {
+      const d = (m.documentos || []).find(x => x.id === Number(inp.dataset.doc));
+      const f = inp.files[0];
+      if (!f && d.obrigatorio) return falha(`Anexe: ${d.nome}.`);
+      if (f) {
+        if (f.size > 5 * 1024 * 1024) return falha(`${f.name} passa de 5 MB.`);
+        fd.append("documentos", d.id); fd.append("arquivos", f);
+      }
+    }
+    if (m.atendimento === "PRESENCIAL") {
+      if (!s.horario) return falha("Escolha um horário.");
+      fd.append("inicio", s.horario.inicio); fd.append("id_gestor", s.horario.gestor_id);
+    }
+    const btn = $("#enviar"); btn.disabled = true;
+    try {
+      const ag = await api("POST", "/api/agendamentos", fd);
+      dialogo(`<h2>${ag.status === "Aprovada" ? "✅ Reunião confirmada" : "📨 Pedido enviado"}</h2>
+        ${ag.inicio ? `<p class="data-grande">${esc(fmtQuando(ag.inicio))} – ${fmtHora(ag.fim)}</p><p class="muted">📍 ${esc(ag.local)}<br>👤 ${esc(ag.gestor)}</p><p class="small muted">Você recebe um lembrete 1 dia e 1 hora antes.</p>`
+          : `<p class="muted">Você será avisado assim que a coordenação responder.</p>`}
+        <div class="acoes"><button class="btn btn-primary" data-fechar>Ver meus pedidos</button></div>`);
+      ir("meus");
+    } catch (e) {
+      btn.disabled = false;
+      falha(erroTexto(e));
+      if (e.status === 409 && m.atendimento === "PRESENCIAL") {
+        const disc = $("#n-disc")?.value;   // mesma disciplina do pedido, senão volta o coordenador do curso
+        s.livres = await api("GET", `/api/horarios/livres?id_motivo=${m.id}${disc ? "&id_disciplina=" + disc : ""}`);
+        s.horario = null; desenhaHorarios();
+      }
+    }
+  }
+};
+
+/* ---------- Coordenador: Agenda ---------- */
+VIEWS.agenda = async main => {
+  const hoje = new Date(), fimSemana = new Date(); fimSemana.setDate(hoje.getDate() + 6);
+  const [ags, pend, reservas] = await Promise.all([
+    api("GET", `/api/agenda?inicio=${isoDia(hoje)}&fim=${isoDia(fimSemana)}&id_status=2`),
+    api("GET", "/api/pendentes"), api("GET", "/api/reservas"),
+  ]);
+  const reunioes = ags.filter(a => a.inicio);
+  const porDia = {};
+  reunioes.forEach(a => (porDia[a.inicio.slice(0, 10)] ||= []).push(a));
+  main.innerHTML = `
+  <div class="topo"><div><h1>Agenda</h1><p class="muted mb0">Reuniões confirmadas nos próximos 7 dias. Os alunos marcam direto nos horários que você abriu.</p></div>
+    <button class="btn btn-primary" id="b-reservar">⛔ Reservar horário</button></div>
+  <div class="grid grid-2">
+    <section><h2>Próximas reuniões <span class="badge b-neutro">${reunioes.length}</span></h2>
+      ${reunioes.length ? Object.entries(porDia).map(([d, lista]) => `
+        <div class="small muted" style="margin:.6rem 0 .35rem;font-weight:700;text-transform:uppercase">${esc(fmtQuando(d + "T00:00").split(" às")[0])}</div>
+        ${lista.map(a => `<article class="card ag-card">
+          <div class="cab"><div><div class="data-grande">${fmtHora(a.inicio)} – ${fmtHora(a.fim)}</div><h3>${esc(a.aluno.nome)} <span class="small muted">RA ${esc(a.aluno.ra)}</span></h3></div><span class="badge b-accent">${esc(a.motivo)}</span></div>
+          <div class="small"><b>${esc(a.titulo)}</b>${a.disciplina ? ` · ${esc(a.disciplina)}` : ""}</div>
+          ${a.descricao ? `<div class="small muted">${esc(a.descricao)}</div>` : ""}
+          <div class="acoes"><button class="btn btn-sm btn-danger" data-canc="${a.id}">Cancelar</button>
+            ${a.aluno.whatsapp ? `<button class="btn btn-sm" data-wpp="${a.id}">WhatsApp</button>` : ""}</div>
+        </article>`).join("")}`).join("") : `<div class="card vazio">Nenhuma reunião confirmada nos próximos 7 dias.</div>`}
+    </section>
+    <section><h2>Pedidos online pendentes <span class="badge b-Pendente">${pend.length}</span></h2>
+      <p class="small muted">Ordenados por prazo, prioridade e chegada.</p>
+      ${pend.length ? pend.map(a => `<article class="card ag-card">
+        <div class="cab"><div><h3>${esc(a.titulo)}</h3><div class="small muted">${esc(a.aluno.nome)} · RA ${esc(a.aluno.ra)} · ${esc(a.motivo)}${a.disciplina ? " · " + esc(a.disciplina) : ""}</div></div>
+          ${a.prioridade === 1 ? `<span class="badge b-accent">Prioridade alta</span>` : ""}</div>
+        <div class="meta"><span>Enviado ${esc(fmtQuando(a.criado_em))}</span>${a.data_limite ? `<span>⏳ prazo ${esc(fmtData(a.data_limite))}</span>` : ""}</div>
+        ${a.anexos.map(x => `<div class="small">📎 ${DEMO ? esc(x.arquivo) : `<a href="/api/anexos/${x.id}" target="_blank" rel="noopener">${esc(x.arquivo)}</a>`} <span class="muted">(${esc(x.documento)})</span></div>`).join("")}
+        <div class="acoes"><button class="btn btn-sm btn-ok" data-dec="${a.id}" data-ok="1">Aceitar</button><button class="btn btn-sm btn-danger" data-dec="${a.id}" data-ok="0">Recusar</button>
+          ${a.aluno.whatsapp ? `<button class="btn btn-sm" data-wpp="${a.id}">WhatsApp</button>` : ""}</div>
+      </article>`).join("") : `<div class="card vazio">Nenhum pedido aguardando resposta. 🎉</div>`}
+      <h2 class="secao">Minhas reservas</h2>
+      ${reservas.length ? reservas.map(r => `<div class="bloco"><span>${esc(fmtQuando(r.inicio))} – ${fmtHora(r.fim)}<br><span class="small muted">${esc(r.motivo || "")}</span></span><button class="btn btn-sm btn-ghost" data-rr="${r.id}" aria-label="Remover reserva">✕</button></div>`).join("")
+        : `<p class="small muted">Nenhuma reserva futura.</p>`}
+    </section>
+  </div>`;
+  $("#b-reservar").addEventListener("click", reservar);
+  $$("[data-canc]").forEach(b => b.addEventListener("click", () => cancelarGestor(Number(b.dataset.canc))));
+  $$("[data-dec]").forEach(b => b.addEventListener("click", () => decidir(Number(b.dataset.dec), b.dataset.ok === "1")));
+  $$("[data-wpp]").forEach(b => b.addEventListener("click", () => whatsapp(Number(b.dataset.wpp))));
+  $$("[data-rr]").forEach(b => b.addEventListener("click", async () => { await api("DELETE", `/api/reservas/${b.dataset.rr}`); toast("Reserva removida."); render(); }));
+};
+
+function reservar() {
+  const agora = new Date(); agora.setMinutes(agora.getMinutes() < 30 ? 30 : 60, 0, 0);
+  const fim = new Date(agora.getTime() + 3600000);
+  dialogo(`<h2>Reservar horário para mim</h2><p class="muted small">Nesse período os alunos não conseguem marcar. Serve para almoço, compromissos ou emergências.</p>
+    <label for="r-mot">Motivo</label><select id="r-mot"><option>Almoço</option><option>Compromisso pessoal</option><option>Emergência médica</option><option>Reunião institucional</option></select>
+    <div class="row"><div style="flex:1"><label for="r-ini">Início</label><input type="datetime-local" id="r-ini" value="${isoLocal(agora)}"></div>
+      <div style="flex:1"><label for="r-fim">Fim</label><input type="datetime-local" id="r-fim" value="${isoLocal(fim)}"></div></div>
+    <div id="r-conf" class="alerta warn mt" hidden></div>
+    <div class="acoes"><button class="btn" data-fechar>Voltar</button><button class="btn btn-primary" id="ok">Reservar</button></div>`,
+  (d, fechar) => {
+    let confirmar = false;
+    $("#ok", d).addEventListener("click", async () => {
+      const corpo = { inicio: $("#r-ini", d).value, fim: $("#r-fim", d).value, motivo: $("#r-mot", d).value, confirmar };
+      try {
+        const r = await api("POST", "/api/reservas", corpo);
+        fechar(); toast(r.canceladas ? `Reservado. ${r.canceladas} reunião(ões) cancelada(s) e aluno(s) avisado(s).` : "Horário reservado."); render();
+      } catch (e) {
+        if (e.status === 409 && e.detail?.reunioes) {
+          confirmar = true;
+          const c = $("#r-conf", d); c.hidden = false;
+          c.innerHTML = `<b>${esc(e.detail.mensagem)}</b><ul class="small" style="margin:.4rem 0;padding-left:1.1rem">${e.detail.reunioes.map(x => `<li>${esc(fmtQuando(x.inicio))} · ${esc(x.aluno)}</li>`).join("")}</ul>Se continuar, elas serão canceladas e cada aluno receberá o motivo e um atalho para remarcar.`;
+          $("#ok", d).textContent = "Reservar e cancelar reuniões";
+        } else toast(erroTexto(e), true);
+      }
+    });
+  });
+}
+
+function cancelarGestor(id) {
+  dialogo(`<h2>Cancelar esta reunião?</h2><label for="cg-mot">Motivo (o aluno vai ver)</label><input id="cg-mot" maxlength="200" placeholder="Ex.: imprevisto">
+    <div class="acoes"><button class="btn" data-fechar>Voltar</button><button class="btn btn-primary" id="ok">Cancelar reunião</button></div>`,
+  (d, fechar) => $("#ok", d).addEventListener("click", async () => {
+    try { await api("PATCH", `/api/agendamentos/${id}/cancelar`, { motivo: $("#cg-mot", d).value || null }); fechar(); toast("Reunião cancelada e aluno avisado."); render(); }
+    catch (e) { toast(erroTexto(e), true); }
+  }));
+}
+
+function decidir(id, aceitar) {
+  dialogo(`<h2>${aceitar ? "Aceitar pedido" : "Recusar pedido"}</h2><label for="dc-obs">Observação ${aceitar ? "(opcional)" : "(motivo da recusa)"}</label><textarea id="dc-obs" maxlength="300"></textarea>
+    <div class="acoes"><button class="btn" data-fechar>Voltar</button><button class="btn ${aceitar ? "btn-ok" : "btn-primary"}" id="ok">${aceitar ? "Aceitar" : "Recusar"}</button></div>`,
+  (d, fechar) => $("#ok", d).addEventListener("click", async () => {
+    try { await api("PATCH", `/api/agendamentos/${id}/decisao`, { aceitar, observacao: $("#dc-obs", d).value || null }); fechar(); toast(aceitar ? "Pedido aceito." : "Pedido recusado."); render(); }
+    catch (e) { toast(erroTexto(e), true); }
+  }));
+}
+
+async function whatsapp(id) {
+  try {
+    const { link } = await api("GET", `/api/agendamentos/${id}/whatsapp`);
+    dialogo(`<h2>Responder pelo WhatsApp</h2><p class="muted small">O link abre o WhatsApp com a mensagem pronta para você completar e enviar.</p>
+      <p><a class="btn btn-ok btn-block" href="${esc(link)}" target="_blank" rel="noopener">Abrir WhatsApp</a></p>
+      <div class="acoes"><button class="btn" data-fechar>Fechar</button></div>`);
+  } catch (e) { toast(erroTexto(e), true); }
+}
+
+/* ---------- Coordenador: Reuniões (filtros) ---------- */
+VIEWS.reunioes = async main => {
+  const motivos = await api("GET", "/api/motivos?todos=1");
+  const ini = new Date(); ini.setDate(1);
+  const fim = new Date(ini.getFullYear(), ini.getMonth() + 1, 0);
+  main.innerHTML = `
+  <div class="topo"><div><h1>Reuniões</h1><p class="muted mb0">Consulte os atendimentos por período, status e motivo.</p></div></div>
+  <form class="card filtros" id="f-filtro">
+    <div><label for="f-ini">De</label><input type="date" id="f-ini" value="${isoDia(ini)}"></div>
+    <div><label for="f-fim">Até</label><input type="date" id="f-fim" value="${isoDia(fim)}"></div>
+    <div><label for="f-st">Status</label><select id="f-st"><option value="">Todos</option><option value="2">Confirmada</option><option value="1">Pendente</option><option value="5">Realizada</option><option value="4">Cancelada</option><option value="3">Recusada</option></select></div>
+    <div><label for="f-mot">Motivo</label><select id="f-mot"><option value="">Todos</option>${motivos.filter(m => m.destino === "COORDENACAO").map(m => `<option value="${m.id}">${esc(m.nome)}</option>`).join("")}</select></div>
+    <div><label for="f-q">Palavra-chave</label><input id="f-q" placeholder="Título ou descrição"></div>
+    <div><button class="btn btn-primary btn-block" type="submit">Filtrar</button></div>
+  </form>
+  <div id="res" class="mt"></div>`;
+  const busca = async () => {
+    const p = new URLSearchParams({ inicio: $("#f-ini").value, fim: $("#f-fim").value });
+    if ($("#f-st").value) p.set("id_status", $("#f-st").value);
+    if ($("#f-mot").value) p.set("id_motivo", $("#f-mot").value);
+    if ($("#f-q").value.trim()) p.set("q", $("#f-q").value.trim());
+    const lista = await api("GET", "/api/agenda?" + p);
+    $("#res").innerHTML = lista.length ? `<div class="card" style="padding:.4rem .8rem"><table class="tabela">
+      <thead><tr><th>Quando</th><th>Aluno</th><th>Motivo</th><th>Assunto</th><th>Status</th><th></th></tr></thead><tbody>
+      ${lista.map(a => `<tr>
+        <td data-l="Quando">${a.inicio ? esc(fmtQuando(a.inicio)) : `Online · ${esc(fmtData(a.criado_em))}`}</td>
+        <td data-l="Aluno">${esc(a.aluno.nome)}<div class="small muted">RA ${esc(a.aluno.ra)}</div></td>
+        <td data-l="Motivo">${esc(a.motivo)}${a.disciplina ? `<div class="small muted">${esc(a.disciplina)}</div>` : ""}</td>
+        <td data-l="Assunto">${esc(a.titulo)}${a.avaliacao ? `<div class="small muted">Nota ${a.avaliacao.nota}/10</div>` : ""}</td>
+        <td>${badge(a.status)}</td>
+        <td>${a.status === "Aprovada" && a.inicio && parse(a.inicio) <= new Date() ? `<button class="btn btn-sm btn-ok" data-real="${a.id}">Marcar realizada</button>` : ""}</td>
+      </tr>`).join("")}</tbody></table></div><p class="small muted">${lista.length} resultado(s).</p>` : `<div class="card vazio">Nada encontrado com esses filtros.</div>`;
+    $$("[data-real]").forEach(b => b.addEventListener("click", async () => {
+      try { await api("PATCH", `/api/agendamentos/${b.dataset.real}/realizada`); toast("Reunião realizada com sucesso. O aluno foi convidado a avaliar."); busca(); }
+      catch (e) { toast(erroTexto(e), true); }
+    }));
+  };
+  $("#f-filtro").addEventListener("submit", e => { e.preventDefault(); busca(); });
+  await busca();
+};
+
+/* ---------- Coordenador: Escala ---------- */
+VIEWS.escala = async main => {
+  const [escalas, minhas, todas] = await Promise.all([api("GET", "/api/escalas"), api("GET", "/api/minhas-disciplinas"), api("GET", "/api/disciplinas")]);
+  main.innerHTML = `
+  <div class="topo"><div><h1>Escala de atendimento</h1><p class="muted mb0">Os alunos só veem horários dentro destes blocos. Um intervalo fixo, como o almoço, vira dois blocos no mesmo dia.</p></div></div>
+  <div class="semana">${[1, 2, 3, 4, 5, 6, 7].map(d => `<section class="card"><h3>${DIAS_LONGOS[d]}</h3>
+    ${escalas.filter(e => e.dia_semana === d).map(e => `<div class="bloco"><span>${esc(e.hora_inicio)}–${esc(e.hora_fim)}<br><span class="small muted">${esc(e.local)}</span></span><button class="btn btn-sm btn-ghost" data-del="${e.id}" aria-label="Remover bloco">✕</button></div>`).join("") || `<p class="small muted">Sem atendimento</p>`}
+  </section>`).join("")}</div>
+  <form class="card mt" id="f-esc"><h2>Adicionar bloco</h2><div class="filtros">
+    <div><label for="e-dia">Dia</label><select id="e-dia">${[1, 2, 3, 4, 5, 6, 7].map(d => `<option value="${d}">${DIAS_LONGOS[d]}</option>`).join("")}</select></div>
+    <div><label for="e-ini">Início</label><input type="time" id="e-ini" value="14:00" required></div>
+    <div><label for="e-fim">Fim</label><input type="time" id="e-fim" value="18:00" required></div>
+    <div style="grid-column: span 2"><label for="e-loc">Local</label><input id="e-loc" value="${esc(escalas[0]?.local || "Bloco A, 2º andar, sala 204")}" required></div>
+    <div><button class="btn btn-primary btn-block" type="submit">Adicionar</button></div></div></form>
+  <section class="card mt"><h2>Disciplinas que atendo</h2><p class="small muted">Limite definido pela coordenação: ${minhas.max ?? "sem limite"}.</p>
+    <div class="opcoes">${todas.map(d => `<label class="check opcao" style="margin:0"><input type="checkbox" value="${d.id}" ${minhas.disciplinas.some(x => x.id === d.id) ? "checked" : ""}> ${esc(d.nome)}</label>`).join("")}</div>
+    <button class="btn mt" id="b-disc">Salvar disciplinas</button></section>`;
+  $$("[data-del]").forEach(b => b.addEventListener("click", async () => { await api("DELETE", `/api/escalas/${b.dataset.del}`); toast("Bloco removido."); render(); }));
+  $("#f-esc").addEventListener("submit", async e => {
+    e.preventDefault();
+    try { await api("POST", "/api/escalas", { dia_semana: Number($("#e-dia").value), hora_inicio: $("#e-ini").value, hora_fim: $("#e-fim").value, local: $("#e-loc").value }); toast("Bloco adicionado."); render(); }
+    catch (er) { toast(erroTexto(er), true); }
+  });
+  $("#b-disc").addEventListener("click", async () => {
+    try { await api("PUT", "/api/minhas-disciplinas", { ids: $$(".opcoes input:checked").map(i => Number(i.value)) }); toast("Disciplinas salvas."); }
+    catch (er) { toast(erroTexto(er), true); }
+  });
+};
+
+/* ---------- Coordenador: Motivos ---------- */
+VIEWS.motivos = async main => {
+  const [motivos, docs] = await Promise.all([api("GET", "/api/motivos?todos=1"), api("GET", "/api/documentos")]);
+  const prio = { 1: "Alta", 2: "Média", 3: "Baixa" };
+  main.innerHTML = `
+  <div class="topo"><div><h1>Motivos de contato</h1><p class="muted mb0">Definem a duração da reunião, a prioridade e os documentos pedidos.</p></div>
+    <button class="btn btn-primary" id="b-novo">＋ Novo motivo</button></div>
+  <div class="card" style="padding:.4rem .8rem"><table class="tabela"><thead><tr><th>Motivo</th><th>Destino</th><th>Atendimento</th><th>Prioridade</th><th>Documentos</th><th></th></tr></thead><tbody>
+  ${motivos.map(m => `<tr>
+    <td data-l="Motivo"><b>${esc(m.nome)}</b>${m.ativo ? "" : ` <span class="badge b-neutro">inativo</span>`}${m.data_limite ? `<div class="small muted">prazo ${esc(fmtData(m.data_limite))}</div>` : ""}</td>
+    <td data-l="Destino">${m.destino === "SECRETARIA" ? "Secretaria" : "Coordenação"}</td>
+    <td data-l="Atendimento">${m.atendimento === "ONLINE" ? "Online" : `Presencial · ${m.duracao_min} min`}</td>
+    <td data-l="Prioridade">${prio[m.prioridade]}</td>
+    <td data-l="Documentos">${m.documentos.map(d => esc(d.nome) + (d.obrigatorio ? " *" : "")).join(", ") || "—"}</td>
+    <td><button class="btn btn-sm" data-ed="${m.id}">Editar</button></td></tr>`).join("")}
+  </tbody></table><p class="small muted">* documento obrigatório</p></div>`;
+  const form = m => dialogo(`<h2>${m ? "Editar motivo" : "Novo motivo"}</h2><form id="f-mot">
+    <label for="m-nome">Nome</label><input id="m-nome" value="${esc(m?.nome || "")}" required maxlength="100">
+    <div class="row"><div style="flex:1"><label for="m-dest">Destino</label><select id="m-dest"><option value="COORDENACAO">Coordenação</option><option value="SECRETARIA">Secretaria</option></select></div>
+      <div style="flex:1"><label for="m-at">Atendimento</label><select id="m-at"><option value="PRESENCIAL">Presencial</option><option value="ONLINE">Online (sem reunião)</option></select></div></div>
+    <div class="row"><div style="flex:1"><label for="m-dur">Duração (min)</label><input type="number" id="m-dur" min="5" max="240" step="5" value="${m?.duracao_min ?? 30}"></div>
+      <div style="flex:1"><label for="m-prio">Prioridade</label><select id="m-prio"><option value="1">Alta</option><option value="2">Média</option><option value="3">Baixa</option></select></div></div>
+    <label for="m-lim">Prazo limite (opcional)</label><input type="date" id="m-lim" value="${esc(m?.data_limite || "")}">
+    <label for="m-ori">Orientação ao aluno</label><textarea id="m-ori" maxlength="300">${esc(m?.orientacao || "")}</textarea>
+    <label class="check"><input type="checkbox" id="m-disc" ${m?.exige_disciplina ? "checked" : ""}> Pedir a disciplina</label>
+    <label class="check"><input type="checkbox" id="m-ativo" ${m?.ativo !== false ? "checked" : ""}> Ativo</label>
+    <h3 class="mt">Documentos</h3>${docs.map(d => { const sel = m?.documentos.find(x => x.id === d.id); return `<div class="row small mt"><label class="check" style="margin:0;flex:1"><input type="checkbox" data-doc="${d.id}" ${sel ? "checked" : ""}> ${esc(d.nome)}</label><label class="check" style="margin:0"><input type="checkbox" data-obr="${d.id}" ${sel?.obrigatorio ? "checked" : ""}> obrigatório</label></div>`; }).join("")}
+    <div class="acoes"><button class="btn" type="button" data-fechar>Voltar</button><button class="btn btn-primary" type="submit">Salvar</button></div></form>`,
+  (d, fechar) => {
+    if (m) { $("#m-dest", d).value = m.destino; $("#m-at", d).value = m.atendimento; $("#m-prio", d).value = m.prioridade; }
+    $("#f-mot", d).addEventListener("submit", async e => {
+      e.preventDefault();
+      const corpo = {
+        nome: $("#m-nome", d).value.trim(), destino: $("#m-dest", d).value, atendimento: $("#m-at", d).value,
+        duracao_min: $("#m-at", d).value === "ONLINE" ? null : Number($("#m-dur", d).value), prioridade: Number($("#m-prio", d).value),
+        data_limite: $("#m-lim", d).value || null, orientacao: $("#m-ori", d).value || null, exige_disciplina: $("#m-disc", d).checked, ativo: $("#m-ativo", d).checked,
+        documentos: $$("[data-doc]:checked", d).map(i => ({ id: Number(i.dataset.doc), obrigatorio: $(`[data-obr="${i.dataset.doc}"]`, d).checked })),
+      };
+      try { await api(m ? "PUT" : "POST", m ? `/api/motivos/${m.id}` : "/api/motivos", corpo); fechar(); toast("Motivo salvo."); render(); }
+      catch (er) { toast(erroTexto(er), true); }
+    });
+  });
+  $("#b-novo").addEventListener("click", () => form(null));
+  $$("[data-ed]").forEach(b => b.addEventListener("click", () => form(motivos.find(m => m.id === Number(b.dataset.ed)))));
+};
+
+/* =====================================================================
+   Início
+   ===================================================================== */
+(async () => {
+  aplicaTema(store.get("tema", "dark"));      // escuro por padrão
+  aplicaFonte(Number(store.get("fonte", 16)));
+  DEMO = await detectaModo();
+  $("#faixa-demo").hidden = !DEMO;
+  try { USER = await api("GET", "/api/me"); } catch { USER = null; }
+  render();
+})();
+</script>
+</body>
+</html>
