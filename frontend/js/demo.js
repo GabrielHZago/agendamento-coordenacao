@@ -106,6 +106,18 @@ const Mock = (() => {
       case "GET /api/cursos": return st.cursos;
       case "GET /api/disciplinas": return st.disciplinas;
       case "GET /api/documentos": return st.documentos;
+      case "POST /api/documentos": exige("coordenador"); {
+        const nome = (json.nome || "").trim().replace(/\s+/g, " ");
+        if (st.documentos.some(x => x.nome === nome)) erro(409, `Já existe o documento "${nome}".`);
+        const doc = { id: st.seq++, nome }; st.documentos.push(doc); return doc;
+      }
+      case "PUT /api/documentos/:id": exige("coordenador"); {
+        const nome = (json.nome || "").trim().replace(/\s+/g, " ");
+        if (st.documentos.some(x => x.nome === nome && x.id !== id)) erro(409, `Já existe o documento "${nome}".`);
+        st.documentos.find(x => x.id === id).nome = nome;
+        st.motivos.forEach(m => m.documentos.forEach(x => { if (x.id === id) x.nome = nome; }));   // o nome vale em todos os motivos
+        return { id, nome };
+      }
       case "GET /api/motivos": exige(); return q.get("todos") ? st.motivos : st.motivos.filter(m => m.ativo);
       case "POST /api/motivos": exige("coordenador"); { const m = { ...json, id: st.seq++, documentos: (json.documentos || []).map(d => ({ ...d, nome: st.documentos.find(x => x.id === d.id).nome })) }; st.motivos.push(m); return m; }
       case "PUT /api/motivos/:id": exige("coordenador"); { const i = st.motivos.findIndex(m => m.id === id); st.motivos[i] = { ...json, id, documentos: (json.documentos || []).map(d => ({ ...d, nome: st.documentos.find(x => x.id === d.id).nome })) }; return st.motivos[i]; }

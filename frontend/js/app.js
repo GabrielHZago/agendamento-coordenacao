@@ -653,26 +653,56 @@ VIEWS.motivos = async main => {
       <div class="col-12"><label for="m-ori" class="form-label">Orientação ao aluno</label><textarea class="form-control" id="m-ori" maxlength="300" rows="2">${esc(m?.orientacao || "")}</textarea></div>
       <div class="col-sm-6"><div class="form-check"><input class="form-check-input" type="checkbox" id="m-disc" ${m?.exige_disciplina ? "checked" : ""}><label class="form-check-label" for="m-disc">Pedir a disciplina</label></div></div>
       <div class="col-sm-6"><div class="form-check"><input class="form-check-input" type="checkbox" id="m-ativo" ${m?.ativo !== false ? "checked" : ""}><label class="form-check-label" for="m-ativo">Ativo</label></div></div>
-      <div class="col-12"><div class="fw-semibold mb-1">Documentos</div><table class="table table-sm mb-0"><tbody>${docs.map(d => { const sel = m?.documentos.find(x => x.id === d.id); return `<tr>
-        <td><div class="form-check mb-0"><input class="form-check-input" type="checkbox" id="doc${d.id}" data-doc="${d.id}" ${sel ? "checked" : ""}><label class="form-check-label" for="doc${d.id}">${esc(d.nome)}</label></div></td>
-        <td class="text-end"><div class="form-check form-check-inline mb-0 me-0"><input class="form-check-input" type="checkbox" id="obr${d.id}" data-obr="${d.id}" ${sel?.obrigatorio ? "checked" : ""}><label class="form-check-label small" for="obr${d.id}">obrigatório</label></div></td></tr>`; }).join("")}</tbody></table></div>
+      <div class="col-12"><div class="fw-semibold">Documentos pedidos ao aluno</div>
+        <p class="small text-body-secondary mb-2">Marque os que este motivo pede. O nome pode ser alterado e vale para todos os motivos.</p>
+        <table class="table table-sm align-middle mb-0"><tbody>${docs.map(d => { const sel = m?.documentos.find(x => x.id === d.id); return `<tr>
+          <td class="col-check"><input class="form-check-input" type="checkbox" data-doc="${d.id}" ${sel ? "checked" : ""} aria-label="Pedir ${esc(d.nome)}"></td>
+          <td><input class="form-control form-control-sm" data-nome="${d.id}" value="${esc(d.nome)}" maxlength="100" aria-label="Nome do documento"></td>
+          <td class="text-end text-nowrap"><div class="form-check form-check-inline mb-0 me-0"><input class="form-check-input" type="checkbox" id="obr${d.id}" data-obr="${d.id}" ${sel?.obrigatorio ? "checked" : ""}><label class="form-check-label small" for="obr${d.id}">obrigatório</label></div></td></tr>`; }).join("")}
+          <tr><td class="col-check"><input class="form-check-input" type="checkbox" id="doc-novo" aria-label="Pedir o novo documento"></td>
+            <td><input class="form-control form-control-sm" id="nome-novo" maxlength="100" placeholder="Outro documento (ex.: Declaração de trabalho)" aria-label="Nome de um novo documento"></td>
+            <td class="text-end text-nowrap"><div class="form-check form-check-inline mb-0 me-0"><input class="form-check-input" type="checkbox" id="obr-novo"><label class="form-check-label small" for="obr-novo">obrigatório</label></div></td></tr>
+        </tbody></table></div>
     </div></form>`,
     rodape: `<button class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button><button class="btn btn-primary" id="ok">Salvar</button>`,
     aoAbrir: (d, fechar) => {
       if (m) { $("#m-dest", d).value = m.destino; $("#m-at", d).value = m.atendimento; $("#m-prio", d).value = m.prioridade; }
       const ajustaDuracao = () => { $("#m-dur", d).disabled = $("#m-at", d).value === "ONLINE"; };
       $("#m-at", d).addEventListener("change", ajustaDuracao); ajustaDuracao();
+      // Marcar "obrigatório" já marca o documento; digitar um documento novo já o seleciona
+      $$("[data-obr]", d).forEach(c => c.addEventListener("change", () => { if (c.checked) $(`[data-doc="${c.dataset.obr}"]`, d).checked = true; }));
+      $("#obr-novo", d).addEventListener("change", e => { if (e.target.checked) $("#doc-novo", d).checked = true; });
+      $("#nome-novo", d).addEventListener("input", e => { $("#doc-novo", d).checked = e.target.value.trim().length > 0; });
+
       $("#ok", d).addEventListener("click", e => comCarregando(e.currentTarget, async () => {
-        const corpo = {
-          nome: $("#m-nome", d).value.trim(), destino: $("#m-dest", d).value, atendimento: $("#m-at", d).value,
-          duracao_min: $("#m-at", d).value === "ONLINE" ? null : Number($("#m-dur", d).value), prioridade: Number($("#m-prio", d).value),
-          data_limite: $("#m-lim", d).value || null, orientacao: $("#m-ori", d).value || null, exige_disciplina: $("#m-disc", d).checked, ativo: $("#m-ativo", d).checked,
-          documentos: $$("[data-doc]:checked", d).map(i => ({ id: Number(i.dataset.doc), obrigatorio: $(`[data-obr="${i.dataset.doc}"]`, d).checked })),
-        };
-        $("#m-nome", d).classList.toggle("is-invalid", corpo.nome.length < 3);
-        if (corpo.nome.length < 3) return;
-        try { await api(m ? "PUT" : "POST", m ? `/api/motivos/${m.id}` : "/api/motivos", corpo); fechar(); toast("Motivo salvo."); render(); }
-        catch (er) { toast(erroTexto(er), true); }
+        const nome = $("#m-nome", d).value.trim();
+        $("#m-nome", d).classList.toggle("is-invalid", nome.length < 3);
+        if (nome.length < 3) return;
+        const nomesDocs = $$("[data-nome]", d).map(i => ({ id: Number(i.dataset.nome), el: i, nome: i.value.trim().replace(/\s+/g, " ") }));
+        const curto = nomesDocs.find(x => x.nome.length < 3);
+        nomesDocs.forEach(x => x.el.classList.toggle("is-invalid", x === curto));
+        if (curto) return toast("O nome do documento precisa de pelo menos 3 letras.", true);
+        try {
+          // 1) renomeia os documentos alterados
+          for (const x of nomesDocs) {
+            if (x.nome !== docs.find(o => o.id === x.id).nome) await api("PUT", `/api/documentos/${x.id}`, { nome: x.nome });
+          }
+          // 2) cria o documento novo, se foi digitado
+          const documentos = $$("[data-doc]:checked", d).map(i => ({ id: Number(i.dataset.doc), obrigatorio: $(`[data-obr="${i.dataset.doc}"]`, d).checked }));
+          const novo = $("#nome-novo", d).value.trim();
+          if (novo) {
+            const doc = await api("POST", "/api/documentos", { nome: novo });
+            if ($("#doc-novo", d).checked) documentos.push({ id: doc.id, obrigatorio: $("#obr-novo", d).checked });
+          }
+          // 3) salva o motivo
+          await api(m ? "PUT" : "POST", m ? `/api/motivos/${m.id}` : "/api/motivos", {
+            nome, destino: $("#m-dest", d).value, atendimento: $("#m-at", d).value,
+            duracao_min: $("#m-at", d).value === "ONLINE" ? null : Number($("#m-dur", d).value), prioridade: Number($("#m-prio", d).value),
+            data_limite: $("#m-lim", d).value || null, orientacao: $("#m-ori", d).value || null,
+            exige_disciplina: $("#m-disc", d).checked, ativo: $("#m-ativo", d).checked, documentos,
+          });
+          fechar(); toast("Motivo salvo."); render();
+        } catch (er) { toast(erroTexto(er), true); }
       }));
     },
   });

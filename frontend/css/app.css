@@ -127,6 +127,8 @@ h2.subtitulo { font-size: 1.05rem; font-weight: 600; margin: 0 0 .6rem; }
 .slots { display: grid; grid-template-columns: repeat(auto-fill, minmax(78px, 1fr)); gap: .35rem; }
 .notas { display: grid; grid-template-columns: repeat(5, 1fr); gap: .35rem; }
 
+.col-check { width: 2rem; }
+
 /* Login */
 .tela-acesso { max-width: 420px; }
 

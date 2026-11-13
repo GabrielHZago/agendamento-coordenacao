@@ -38,6 +38,41 @@ def documentos(u: dict = Depends(exige_login), db: Session = Depends(get_db)):
     return [{"id": d.id, "nome": d.nome} for d in db.scalars(select(Documento).order_by(Documento.nome))]
 
 
+class DocumentoIn(BaseModel):
+    nome: str = Field(min_length=3, max_length=100)
+
+
+def _nome_documento(dados: DocumentoIn, db: Session, ignorar_id: int | None = None) -> str:
+    nome = " ".join(dados.nome.split())          # tira espaços duplicados
+    if len(nome) < 3:
+        raise HTTPException(422, "O nome do documento precisa de pelo menos 3 letras.")
+    existente = db.scalar(select(Documento).where(Documento.nome == nome))
+    if existente and existente.id != ignorar_id:
+        raise HTTPException(409, f"Já existe o documento \"{nome}\".")
+    return nome
+
+
+@router.post("/documentos", status_code=201)
+def criar_documento(dados: DocumentoIn, u: dict = Depends(exige_gestor), db: Session = Depends(get_db)):
+    """A coordenação cria tipos de documento (ex.: "Declaração de trabalho")."""
+    d = Documento(nome=_nome_documento(dados, db))
+    db.add(d)
+    db.commit()
+    return {"id": d.id, "nome": d.nome}
+
+
+@router.put("/documentos/{id_documento}")
+def renomear_documento(id_documento: int, dados: DocumentoIn, u: dict = Depends(exige_gestor),
+                       db: Session = Depends(get_db)):
+    """Renomeia o documento; o nome novo vale em todos os motivos que o pedem."""
+    d = db.get(Documento, id_documento)
+    if not d:
+        raise HTTPException(404, "Documento não encontrado.")
+    d.nome = _nome_documento(dados, db, ignorar_id=d.id)
+    db.commit()
+    return {"id": d.id, "nome": d.nome}
+
+
 class DocIn(BaseModel):
     id: int
     obrigatorio: bool = False
