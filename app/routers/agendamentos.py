@@ -7,7 +7,7 @@ from urllib.parse import quote
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
-from sqlalchemy import case, func, select
+from sqlalchemy import case, false, func, select
 from sqlalchemy.exc import DBAPIError, IntegrityError
 from sqlalchemy.orm import Session
 
@@ -312,7 +312,7 @@ def notificacoes(u: dict = Depends(exige_aluno), db: Session = Depends(get_db)):
 @router.patch("/notificacoes/lidas")
 def marcar_lidas(u: dict = Depends(exige_aluno), db: Session = Depends(get_db)):
     ids = select(Agendamento.id).where(Agendamento.id_aluno == u["id"])
-    for n in db.scalars(select(Notificacao).where(Notificacao.id_agendamento.in_(ids), Notificacao.lida.is_(False))):
+    for n in db.scalars(select(Notificacao).where(Notificacao.id_agendamento.in_(ids), Notificacao.lida == false())):
         n.lida = True
     db.commit()
     return {"ok": True}

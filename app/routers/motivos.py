@@ -4,7 +4,7 @@ from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import select, true
 from sqlalchemy.orm import Session
 
 from ..database import get_db
@@ -29,7 +29,7 @@ def motivo_json(m: Motivo) -> dict:
 def listar(todos: bool = False, u: dict = Depends(exige_login), db: Session = Depends(get_db)):
     q = select(Motivo).order_by(Motivo.destino, Motivo.nome)
     if not (todos and u["perfil"] == "coordenador"):
-        q = q.where(Motivo.ativo.is_(True))
+        q = q.where(Motivo.ativo == true())
     return [motivo_json(m) for m in db.scalars(q)]
 
 
