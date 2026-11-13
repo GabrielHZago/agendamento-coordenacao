@@ -1,0 +1,67 @@
+"""Proteções da aplicação: limite de requisições, cabeçalhos de segurança e tamanho do corpo.
+
+Camadas contra abuso (da mais externa para a mais interna):
+  1. ufw            — só portas 22 e 80 abertas; SSH com "limit" (anti força bruta)
+  2. nginx          — conexões simultâneas por IP, taxa por IP, timeouts curtos, corpo máximo
+  3. uvicorn        — --limit-concurrency por worker (503 quando lota, em vez de travar)
+  4. esta camada    — limite por rota (slowapi), corpo máximo, cabeçalhos (CSP etc.)
+  5. rotas          — validação Pydantic, ORM parametrizado, bloqueio de login após 5 falhas
+"""
+from fastapi import Request
+from fastapi.responses import JSONResponse
+from slowapi import Limiter
+from slowapi.util import get_remote_address
+
+from .config import LIMITE_REQUISICOES, UPLOAD_MAX_MB, MAX_ARQUIVOS
+
+
+def chave_do_cliente(request: Request) -> str:
+    """Quem conta como "um cliente" para o limite de requisições."""
+    # TODO(human): decidir a chave do limite (ver explicação na conversa)
+    return get_remote_address(request)
+
+
+limiter = Limiter(key_func=chave_do_cliente, default_limits=[LIMITE_REQUISICOES],
+                  headers_enabled=False)
+
+# Corpo máximo: todos os anexos no limite + folga para os campos do formulário
+CORPO_MAX_BYTES = (UPLOAD_MAX_MB * MAX_ARQUIVOS + 1) * 1024 * 1024
+
+# CSP: só scripts, estilos, fontes e imagens do próprio servidor (sem CDN, sem inline).
+# "data:" em img-src: o Bootstrap usa SVG embutido nos ícones de select, checkbox e botão fechar.
+CSP = ("default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; "
+       "font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; "
+       "form-action 'self'; frame-ancestors 'none'")
+
+CABECALHOS = {
+    "X-Content-Type-Options": "nosniff",           # navegador não "adivinha" o tipo do arquivo
+    "X-Frame-Options": "DENY",                     # ninguém embute o sistema num iframe (clickjacking)
+    "Referrer-Policy": "same-origin",
+    "Permissions-Policy": "camera=(), microphone=(), geolocation=(), payment=(), usb=()",
+    "Cross-Origin-Opener-Policy": "same-origin",
+    "Cross-Origin-Resource-Policy": "same-origin",
+}
+
+# A documentação (/docs) carrega o Swagger de uma CDN; fica sem CSP e só existe com API_DOCS=1
+SEM_CSP = ("/docs", "/redoc", "/openapi.json")
+
+
+async def cabecalhos_e_tamanho(request: Request, call_next):
+    tamanho = request.headers.get("content-length")
+    if tamanho and tamanho.isdigit() and int(tamanho) > CORPO_MAX_BYTES:
+        return JSONResponse({"detail": "Envio grande demais."}, status_code=413)
+
+    resposta = await call_next(request)
+    for nome, valor in CABECALHOS.items():
+        resposta.headers.setdefault(nome, valor)
+    caminho = request.url.path
+    if not caminho.startswith(SEM_CSP):
+        resposta.headers.setdefault("Content-Security-Policy", CSP)
+    if caminho.startswith("/api/"):
+        resposta.headers["Cache-Control"] = "no-store"   # dados pessoais não ficam em cache
+    return resposta
+
+
+def limite_estourado(request: Request, exc) -> JSONResponse:
+    return JSONResponse({"detail": "Muitas requisições em pouco tempo. Aguarde um minuto e tente de novo."},
+                        status_code=429, headers={"Retry-After": "60"})

@@ -131,5 +131,10 @@ def busca_texto(coluna_titulo, coluna_descricao, q: str | None):
     """Filtro de palavra-chave no título ou na descrição (RF13). Parametrizado: sem SQL injection."""
     if not q:
         return None
-    padrao = f"%{q.strip()[:60]}%"
-    return or_(coluna_titulo.ilike(padrao), coluna_descricao.ilike(padrao))
+    termo = q.strip()[:60]
+    if not termo:
+        return None
+    # % e _ digitados pelo usuário viram texto comum, não curinga do LIKE
+    termo = termo.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    padrao = f"%{termo}%"
+    return or_(coluna_titulo.ilike(padrao, escape="\\"), coluna_descricao.ilike(padrao, escape="\\"))

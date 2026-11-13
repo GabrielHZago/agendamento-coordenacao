@@ -1,9 +1,10 @@
 """Pedidos de reunião: marcar (confirmação automática), pedidos online, cancelar, concluir e avaliar."""
 import uuid
+from pathlib import Path
 from datetime import date, datetime, timedelta
 from urllib.parse import quote
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import case, func, select
@@ -11,10 +12,12 @@ from sqlalchemy.exc import DBAPIError, IntegrityError
 from sqlalchemy.orm import Session
 
 from ..config import (ANTECEDENCIA_MIN_HORAS, APROVADA, CANCELADA, CANCELAMENTO_MIN_HORAS,
-                      PENDENTE, REALIZADA, RECUSADA, UPLOAD_DIR, UPLOAD_MAX_MB)
+                      LIMITE_AGENDAMENTO, MAX_ARQUIVOS, PENDENTE, REALIZADA, RECUSADA,
+                      UPLOAD_DIR, UPLOAD_MAX_MB)
 from ..database import IS_SQLITE, get_db
 from ..models import (Agendamento, Aluno, Anexo, Avaliacao, Disciplina, Gestor, Motivo,
                       Notificacao)
+from ..protecao import limiter
 from ..security import exige_aluno, exige_gestor, exige_login
 from ..servicos import (agendamento_json, avisa, busca_texto, gestores_do_aluno, quando,
                         valida_periodo)
@@ -24,22 +27,30 @@ router = APIRouter(prefix="/api", tags=["agendamentos"])
 TIPOS = {b"%PDF": ".pdf", b"\x89PNG": ".png", b"\xff\xd8\xff": ".jpg"}  # RNF17: confere o conteúdo real
 
 
-async def _salva_arquivo(arq: UploadFile) -> tuple[str, str]:
+async def _le_arquivo(arq: UploadFile) -> tuple[bytes, str, str]:
+    """Lê e confere o arquivo (tamanho e tipo real). Ainda não grava nada no disco."""
     conteudo = await arq.read(UPLOAD_MAX_MB * 1024 * 1024 + 1)
     if len(conteudo) > UPLOAD_MAX_MB * 1024 * 1024:
         raise HTTPException(413, f"O arquivo {arq.filename} passa de {UPLOAD_MAX_MB} MB.")
     ext = next((e for magica, e in TIPOS.items() if conteudo.startswith(magica)), None)
     if not ext:
         raise HTTPException(415, f"{arq.filename}: envie PDF, JPG ou PNG.")
+    nome_original = Path(arq.filename or "arquivo").name[:200]   # sem pastas no nome
+    return conteudo, ext, nome_original
+
+
+def _grava_arquivo(conteudo: bytes, ext: str) -> str:
     UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
-    nome = f"{uuid.uuid4().hex}{ext}"          # nome gerado pelo sistema
+    nome = f"{uuid.uuid4().hex}{ext}"          # nome gerado pelo sistema, nunca o do aluno
     (UPLOAD_DIR / nome).write_bytes(conteudo)
-    return nome, (arq.filename or nome)[:200]
+    return nome
 
 
 # ======================= ALUNO =======================
 @router.post("/agendamentos", status_code=201)
+@limiter.limit(LIMITE_AGENDAMENTO)
 async def solicitar(
+    request: Request,
     id_motivo: int = Form(...),
     titulo: str = Form(..., min_length=3, max_length=100),
     descricao: str | None = Form(None, max_length=500),
@@ -69,12 +80,18 @@ async def solicitar(
 
     # RN17: documentos obrigatórios
     obrigatorios = {d.id_documento for d in motivo.documentos if d.obrigatorio}
+    if len(arquivos) > MAX_ARQUIVOS:
+        raise HTTPException(422, f"Envie no máximo {MAX_ARQUIVOS} arquivos.")
     if len(documentos) != len(arquivos):
         raise HTTPException(422, "Cada arquivo precisa indicar qual documento é.")
+    if not set(documentos) <= {d.id_documento for d in motivo.documentos}:
+        raise HTTPException(422, "Documento não pedido para esse motivo.")
     faltando = obrigatorios - set(documentos)
     if faltando:
         nomes = [d.documento.nome for d in motivo.documentos if d.id_documento in faltando]
         raise HTTPException(422, "Anexe: " + ", ".join(nomes))
+
+    lidos = [await _le_arquivo(arq) for arq in arquivos]   # confere todos antes de gravar qualquer um
 
     gestores = gestores_do_aluno(db, aluno, id_disciplina)
     if not gestores:
@@ -112,8 +129,8 @@ async def solicitar(
     db.add(ag)
     try:
         db.flush()
-        for id_doc, arq in zip(documentos, arquivos):
-            caminho, nome = await _salva_arquivo(arq)
+        for id_doc, (conteudo, ext, nome) in zip(documentos, lidos):
+            caminho = _grava_arquivo(conteudo, ext)
             db.add(Anexo(id_agendamento=ag.id, id_documento=id_doc, nome_arquivo=nome, caminho=caminho))
         db.refresh(ag)
         if ag.id_status == APROVADA:

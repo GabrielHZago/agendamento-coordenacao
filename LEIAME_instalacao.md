@@ -28,7 +28,7 @@ O script baixa o projeto do GitHub, pede a senha do administrador do banco (`sa`
 atualiza o Ubuntu, instala SQL Server 2025 Express, cria banco, tabelas e um usuário do banco
 com permissão mínima, instala Python e as dependências, cria o serviço que sobe sozinho com a VM,
 configura o firewall e confere se o sistema respondeu.
-No fim, ele mostra o endereço de acesso, por exemplo `http://192.168.0.15:8000`.
+No fim, ele mostra o endereço de acesso, por exemplo `http://192.168.0.15` (porta 80, pelo nginx).
 
 Outras formas:
 
@@ -52,7 +52,8 @@ Qualquer celular ou computador **na mesma rede** abre o endereço mostrado no na
 - Wi-Fi da faculdade costuma isolar os aparelhos (um não enxerga o outro).
   Se isso acontecer na demonstração, use o **roteador do celular** de alguém do grupo:
   ligue o notebook com a VM e os celulares nessa mesma rede.
-- O banco (porta 1433) não fica exposto: só o sistema conversa com ele, dentro da VM.
+- Só as portas 22 (SSH, com limite contra força bruta) e 80 (nginx) ficam abertas.
+  O uvicorn (8000) e o banco (1433) só aceitam conexões de dentro da VM.
 
 ## Desenvolvimento local (sem SQL Server)
 
@@ -73,3 +74,16 @@ pytest                          # testes automatizados
 | Ver os logs ao vivo | `sudo journalctl -u agendamento -f` |
 | Reiniciar | `sudo systemctl restart agendamento` |
 | Abrir o banco pelo terminal | `sqlcmd -C -I -S localhost -U sa -d agendamento` |
+
+## Segurança (resumo)
+
+| Ameaça | Proteção |
+| --- | --- |
+| DDoS / excesso de acessos | nginx: 30 conexões e 20 req/s por IP, login 10/min, timeouts curtos (slowloris), corpo máx. 27 MB; uvicorn com `--limit-concurrency`; SYN cookies no kernel; Python: limite por rota (slowapi) |
+| SQL injection | só consultas pelo ORM (parametrizadas); `%` e `_` da busca tratados como texto; nomes do instalador validados |
+| XSS | CSP `script-src 'self'` (sem script inline nem CDN), todo texto escapado antes de ir para a tela |
+| Força bruta no login | bloqueio de 15 min após 5 erros, limite no nginx, resposta com o mesmo tempo para RA inexistente |
+| Upload malicioso | só PDF/PNG/JPG conferidos pelo conteúdo (magic bytes), até 5 MB e 5 arquivos, nome gerado pelo sistema, fora da pasta pública |
+| Invasão do processo | serviço isolado pelo systemd (`ProtectSystem=strict`, sem privilégios, só grava em `uploads/`); banco com usuário sem permissão de alterar tabelas |
+
+Ver os bloqueios do nginx: `sudo grep -c " 429 " /var/log/nginx/access.log`.

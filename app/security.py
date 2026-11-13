@@ -18,6 +18,17 @@ def confere_senha(senha: str, senha_hash: str) -> bool:
         return False
 
 
+_HASH_FALSO: str | None = None
+
+
+def senha_falsa() -> str:
+    """Hash bcrypt de uma senha aleatória, usado quando o login não existe."""
+    global _HASH_FALSO
+    if _HASH_FALSO is None:
+        _HASH_FALSO = hash_senha(bcrypt.gensalt().decode())
+    return _HASH_FALSO
+
+
 # Tentativas de login por "IP + login" (em memória; reinicia com o serviço)
 _falhas: dict[str, list[float]] = {}
 

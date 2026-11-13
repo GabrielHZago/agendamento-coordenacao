@@ -7,10 +7,12 @@ from pydantic import BaseModel, EmailStr, Field, field_validator
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
+from ..config import LIMITE_CADASTRO, LIMITE_LOGIN
 from ..database import get_db
 from ..models import Aluno, Curso, Disciplina, Gestor, SenhaAluno, SenhaGestor
+from ..protecao import limiter
 from ..security import (checa_bloqueio, confere_senha, exige_login, hash_senha,
-                        limpa_falhas, registra_falha, usuario)
+                        limpa_falhas, registra_falha, senha_falsa, usuario)
 
 router = APIRouter(prefix="/api", tags=["acesso"])
 
@@ -22,6 +24,7 @@ class LoginIn(BaseModel):
 
 
 @router.post("/login")
+@limiter.limit(LIMITE_LOGIN)
 def login(dados: LoginIn, request: Request, db: Session = Depends(get_db)):
     ip = request.client.host if request.client else "?"
     chave = f"{ip}:{dados.perfil}:{dados.login.lower()}"
@@ -35,7 +38,9 @@ def login(dados: LoginIn, request: Request, db: Session = Depends(get_db)):
         pessoa = db.scalar(select(Gestor).where(Gestor.email == login_.lower()))
         senha = db.get(SenhaGestor, pessoa.id) if pessoa else None
 
-    if not pessoa or not senha or not confere_senha(dados.senha, senha.senha_hash):
+    # Sem usuário, confere contra um hash falso: a resposta demora o mesmo e não revela se o RA existe
+    senha_ok = confere_senha(dados.senha, senha.senha_hash if senha else senha_falsa())
+    if not pessoa or not senha or not senha_ok:
         registra_falha(chave)
         raise HTTPException(401, "RA/e-mail ou senha incorretos.")
 
@@ -85,6 +90,7 @@ class CadastroIn(BaseModel):
 
 
 @router.post("/alunos", status_code=201)
+@limiter.limit(LIMITE_CADASTRO)
 def cadastrar(dados: CadastroIn, request: Request, db: Session = Depends(get_db)):
     if not dados.aceite_lgpd:
         raise HTTPException(422, "É preciso aceitar o uso dos dados (LGPD) para criar a conta.")

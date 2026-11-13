@@ -3,15 +3,15 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
-from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
-from slowapi.util import get_remote_address
 from starlette.middleware.sessions import SessionMiddleware
 
-from .config import FRONTEND_DIR, LIMITE_REQUISICOES, SECRET_KEY
+from .config import API_DOCS, FRONTEND_DIR, SECRET_KEY
 from .database import IS_SQLITE, Base, SessionLocal, engine
+from .protecao import cabecalhos_e_tamanho, limite_estourado, limiter
 from .routers import agenda, agendamentos, auth, motivos
+
 
 @asynccontextmanager
 async def ciclo_de_vida(_app: FastAPI):
@@ -37,13 +37,18 @@ app = FastAPI(
     description="API do sistema de agendamento entre alunos e coordenação.",
     version="1.0",
     lifespan=ciclo_de_vida,
+    docs_url="/docs" if API_DOCS else None,
+    redoc_url=None,
+    openapi_url="/openapi.json" if API_DOCS else None,
 )
 
-# RNF13: limite de requisições por endereço
-limiter = Limiter(key_func=get_remote_address, default_limits=[LIMITE_REQUISICOES])
+# RNF13: limite de requisições por cliente (padrão em todas as rotas + limites próprios nas sensíveis)
 app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+app.add_exception_handler(RateLimitExceeded, limite_estourado)
 app.add_middleware(SlowAPIMiddleware)
+
+# Cabeçalhos de segurança (CSP, nosniff, anti-iframe) e corpo máximo da requisição
+app.middleware("http")(cabecalhos_e_tamanho)
 
 # RNF16: cookie de sessão HttpOnly e SameSite. Com HTTPS (publicação), troque https_only para True.
 app.add_middleware(SessionMiddleware, secret_key=SECRET_KEY, session_cookie="agendamento_sessao",

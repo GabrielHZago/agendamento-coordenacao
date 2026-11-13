@@ -1,0 +1,121 @@
+/* Ajustes sobre o Bootstrap 5.3: cores da coordenação, alvos de toque e detalhes de layout. */
+
+/* ---------- Cores (claro e escuro) ---------- */
+:root, [data-bs-theme="light"] {
+  --marca: #16325c;            /* azul institucional */
+  --marca-2: #e07a1f;          /* laranja de destaque */
+  --bs-primary: #1f4f8f;
+  --bs-primary-rgb: 31, 79, 143;
+  --bs-link-color: #1f4f8f;
+  --bs-link-color-rgb: 31, 79, 143;
+  --bs-body-bg: #f3f5f8;
+  --bs-tertiary-bg: #ffffff;
+}
+[data-bs-theme="dark"] {
+  --marca: #9ec0ef;
+  --marca-2: #f0a35c;
+  --bs-primary: #6f9fe0;
+  --bs-primary-rgb: 111, 159, 224;
+  --bs-link-color: #8fb5ea;
+  --bs-link-color-rgb: 143, 181, 234;
+  --bs-body-bg: #0f141b;
+  --bs-tertiary-bg: #161d27;
+  --bs-border-color: #2a3442;
+}
+.btn-primary {
+  --bs-btn-bg: #1f4f8f; --bs-btn-border-color: #1f4f8f;
+  --bs-btn-hover-bg: #183f74; --bs-btn-hover-border-color: #183f74;
+  --bs-btn-active-bg: #12315a; --bs-btn-active-border-color: #12315a;
+  --bs-btn-disabled-bg: #1f4f8f; --bs-btn-disabled-border-color: #1f4f8f;
+}
+[data-bs-theme="dark"] .btn-primary {
+  --bs-btn-bg: #3d72bd; --bs-btn-border-color: #3d72bd;
+  --bs-btn-hover-bg: #4b82cf; --bs-btn-hover-border-color: #4b82cf;
+  --bs-btn-active-bg: #2f5f9f; --bs-btn-active-border-color: #2f5f9f;
+}
+.btn-outline-primary {
+  --bs-btn-color: var(--bs-primary); --bs-btn-border-color: var(--bs-primary);
+  --bs-btn-hover-bg: var(--bs-primary); --bs-btn-hover-border-color: var(--bs-primary);
+  --bs-btn-active-bg: var(--bs-primary); --bs-btn-active-border-color: var(--bs-primary);
+  --bs-btn-hover-color: #fff; --bs-btn-active-color: #fff;
+}
+.card, .list-group { --bs-card-bg: var(--bs-tertiary-bg); --bs-list-group-bg: var(--bs-tertiary-bg); }
+
+/* ---------- Cabeçalho ---------- */
+.navbar-brand { font-weight: 700; font-size: 1.05rem; }
+.navbar-brand small { font-size: .72rem; letter-spacing: .02em; }
+.marca-icone {
+  width: 36px; height: 36px; border-radius: .6rem; display: grid; place-items: center;
+  background: var(--marca); color: #fff; font-size: 1.1rem;
+}
+[data-bs-theme="dark"] .marca-icone { background: #234a80; }
+.navbar .nav-link.active { color: var(--bs-primary); font-weight: 600; }
+.faixa-demo { background: rgba(224, 122, 31, .15); color: var(--marca-2); }
+
+/* ---------- Acessibilidade: alvos de toque >= 44 px ---------- */
+.btn:not(.btn-sm), .form-control, .form-select { min-height: 44px; }
+.btn-sm { min-height: 36px; }
+.form-check-input { width: 1.25em; height: 1.25em; }
+:focus-visible { outline: 3px solid var(--marca-2); outline-offset: 2px; }
+
+/* ---------- Componentes do sistema ---------- */
+.titulo-pagina { font-size: 1.5rem; font-weight: 700; margin-bottom: .15rem; }
+.sobretitulo { font-size: .75rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--bs-secondary-color); }
+.card-destaque { border-left: 4px solid var(--marca-2); }
+.data-grande { font-size: 1.15rem; font-weight: 700; }
+.meta { display: flex; flex-wrap: wrap; gap: .25rem 1rem; color: var(--bs-secondary-color); font-size: .9rem; }
+.vazio { text-align: center; padding: 2.5rem 1rem; color: var(--bs-secondary-color); }
+.vazio .bi { font-size: 2rem; display: block; margin-bottom: .5rem; opacity: .6; }
+
+/* Status do pedido */
+.status { font-weight: 600; }
+.status-Pendente { background: rgba(var(--bs-warning-rgb), .18); color: var(--bs-warning-text-emphasis); }
+.status-Aprovada { background: rgba(var(--bs-success-rgb), .18); color: var(--bs-success-text-emphasis); }
+.status-Recusada { background: rgba(var(--bs-danger-rgb), .16); color: var(--bs-danger-text-emphasis); }
+.status-Cancelada { background: rgba(var(--bs-secondary-rgb), .18); color: var(--bs-secondary-color); }
+.status-Realizada { background: rgba(var(--bs-info-rgb), .18); color: var(--bs-info-text-emphasis); }
+
+/* Login */
+.tela-login { max-width: 430px; }
+.tela-login .marca-icone { width: 56px; height: 56px; font-size: 1.6rem; border-radius: .9rem; margin: 0 auto .75rem; }
+
+/* Etapas da nova solicitação */
+.etapas { display: flex; gap: .25rem; counter-reset: etapa; }
+.etapas li { flex: 1; list-style: none; font-size: .8rem; font-weight: 600; color: var(--bs-secondary-color);
+  border-top: 4px solid var(--bs-border-color); padding-top: .4rem; }
+.etapas li.feito { border-color: var(--bs-success); color: var(--bs-success-text-emphasis); }
+.etapas li.ativo { border-color: var(--bs-primary); color: var(--bs-primary); }
+
+/* Cartões de opção (motivo) */
+.opcao { text-align: left; height: 100%; width: 100%; padding: .85rem 1rem; }
+.btn-check:checked + .opcao { border-color: var(--bs-primary); background: rgba(var(--bs-primary-rgb), .12); color: var(--bs-body-color); }
+.btn-check + .opcao:hover { border-color: var(--bs-primary); }
+
+/* Dias e horários */
+.dias { display: flex; gap: .5rem; overflow-x: auto; padding-bottom: .5rem; scrollbar-width: thin; }
+.dias .btn { flex: 0 0 auto; min-width: 72px; line-height: 1.15; padding: .45rem .4rem; }
+.dias .btn b { display: block; font-size: 1.2rem; }
+.dias .btn span { font-size: .72rem; text-transform: uppercase; }
+.slots { display: grid; grid-template-columns: repeat(auto-fill, minmax(88px, 1fr)); gap: .5rem; }
+.notas { display: grid; grid-template-columns: repeat(5, 1fr); gap: .4rem; }
+
+/* Tabela vira cartões no celular */
+@media (max-width: 767.98px) {
+  .tabela-responsiva thead { display: none; }
+  .tabela-responsiva, .tabela-responsiva tbody, .tabela-responsiva tr, .tabela-responsiva td { display: block; width: 100%; }
+  .tabela-responsiva tr { border: 1px solid var(--bs-border-color); border-radius: .5rem; padding: .5rem .75rem; margin-bottom: .6rem; }
+  .tabela-responsiva td { border: 0; padding: .2rem 0; }
+  .tabela-responsiva td[data-l]::before { content: attr(data-l) ": "; color: var(--bs-secondary-color); font-size: .85rem; }
+}
+
+/* Animações curtas. Modal, toast, collapse, spinner e placeholder já vêm do Bootstrap;
+   aqui só a entrada das telas, o "sacode" do login errado e o ícone de sucesso. */
+@keyframes entra { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@keyframes sacode { 20%, 60% { transform: translateX(-6px); } 40%, 80% { transform: translateX(6px); } }
+@keyframes surge { 0% { opacity: 0; transform: scale(.6); } 70% { transform: scale(1.08); } 100% { opacity: 1; transform: none; } }
+.entra { animation: entra .3s ease-out both; }
+.sacode { animation: sacode .4s ease-in-out; }
+.surge { animation: surge .45s ease-out both; }
+@media (prefers-reduced-motion: reduce) {
+  .entra, .sacode, .surge { animation: none !important; }
+}
