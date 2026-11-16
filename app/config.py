@@ -43,9 +43,12 @@ SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "")
 SMTP_FROM = os.getenv("SMTP_FROM", SMTP_USER)
 RECUPERACAO_VALIDADE_MIN = 30
 LIMITE_RECUPERACAO = "5/hour"
-# Modo apresentação: devolve o link na própria tela (a rede da faculdade pode bloquear o e-mail).
-# NUNCA ligue em produção: qualquer um redefiniria a senha de qualquer e-mail.
-RECUPERACAO_MOSTRA_LINK = os.getenv("RECUPERACAO_MOSTRA_LINK", "1" if DESENVOLVIMENTO else "0") == "1"
+# Modo apresentação: atalho para #admin no topo da tela e link de "Esqueci a senha" na própria tela
+# (a rede da faculdade pode bloquear o e-mail). NUNCA ligue em produção: qualquer um redefiniria
+# a senha de qualquer e-mail. RECUPERACAO_MOSTRA_LINK é o nome antigo, ainda aceito.
+MODO_APRESENTACAO = os.getenv("MODO_APRESENTACAO", os.getenv("RECUPERACAO_MOSTRA_LINK",
+                                                             "1" if DESENVOLVIMENTO else "0")) == "1"
+RECUPERACAO_MOSTRA_LINK = MODO_APRESENTACAO
 
 # Status (tb_status)
 PENDENTE, APROVADA, RECUSADA, CANCELADA, REALIZADA = 1, 2, 3, 4, 5

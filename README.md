@@ -116,6 +116,9 @@ Abra `http://IP-DA-VM/#admin` e informe a **chave de administração**, mostrada
 e guardada em `/opt/agendamento/.env` (`ADMIN_KEY`). Ali se cria o coordenador e se definem os cursos e
 as disciplinas que ele atende; o coordenador só consulta essa lista. No desenvolvimento (SQLite) a chave é `dev`.
 
+A aba **Banco de dados** mostra as tabelas (sem as de senha), página a página, e permite apagar registros.
+Um registro ainda usado por outro (ex.: aluno com pedidos) não é apagado: a tela diz onde ele é usado.
+
 ## Esqueci a senha
 
 O link de redefinição vai por e-mail, vale 30 minutos e só funciona uma vez (não precisa de tabela no banco:
@@ -126,8 +129,19 @@ curl -fsSL https://raw.githubusercontent.com/GabrielHZago/agendamento-coordenaca
 ```
 
 Sem SMTP, o link aparece no log: `sudo journalctl -u agendamento | grep redefini`.
-**Na apresentação**, se a rede bloquear e-mail, instale com `RECUPERACAO_MOSTRA_LINK=1` para o link
-aparecer na própria tela. Nunca deixe ligado fora da apresentação.
+**Na apresentação**, se a rede bloquear e-mail, ligue o **modo apresentação** (`MODO_APRESENTACAO=1` na instalação
+ou pelo `agendamento-config`): o link aparece na própria tela e surge o atalho "Administração" no topo.
+Nunca deixe ligado fora da apresentação.
+
+## Alterar chaves, e-mail e senhas pelo terminal
+
+```bash
+sudo agendamento-config
+```
+
+Menu para ver a configuração (senhas escondidas) e trocar: chave da administração, e-mail (com envio de teste),
+modo apresentação, senha do usuário do banco, senha do `sa` e chave secreta. O sistema é reiniciado no fim.
+`sudo agendamento-config ver` só mostra a configuração.
 
 ## Comandos úteis
 

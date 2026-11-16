@@ -4,19 +4,25 @@ Protegida por uma chave (ADMIN_KEY no .env, gerada pelo instalar.sh), enviada no
 Sem chave configurada, as rotas respondem 404 (a tela não existe).
 """
 import hmac
+import logging
+from datetime import date, datetime, time
+from decimal import Decimal
+from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, EmailStr, Field, field_validator
-from sqlalchemy import select
+from sqlalchemy import delete, func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from ..config import ADMIN_KEY, LIMITE_ADMIN
-from ..database import get_db
-from ..models import Curso, Disciplina, Gestor, SenhaGestor
+from ..config import ADMIN_KEY, LIMITE_ADMIN, UPLOAD_DIR
+from ..database import Base, get_db
+from ..models import Curso, Disciplina, Gestor, SenhaAluno, SenhaGestor
 from ..protecao import limiter
 from ..security import hash_senha, valida_senha
 
 router = APIRouter(prefix="/api/admin", tags=["administração"])
+log = logging.getLogger("uvicorn.error")
 
 
 def exige_admin(request: Request) -> None:
@@ -85,6 +91,101 @@ def criar(dados: CoordenadorIn, request: Request, _: None = Depends(exige_admin)
     db.add(SenhaGestor(id_gestor=g.id, senha_hash=hash_senha(dados.senha)))
     db.commit()
     return coordenador_json(g)
+
+
+# ---------- Visualizar o banco (somente leitura) ----------
+OCULTAS = {"tb_senhas_alunos", "tb_senhas_gestores"}       # hashes de senha nunca saem do servidor
+POR_PAGINA = 50
+
+
+def _tabelas() -> dict:
+    """Só tabelas conhecidas pelo sistema: o nome vindo da URL nunca vira SQL."""
+    return {nome: t for nome, t in Base.metadata.tables.items() if nome not in OCULTAS}
+
+
+def _valor(v):
+    if isinstance(v, (datetime, date, time)):
+        return v.isoformat(sep=" ", timespec="minutes") if isinstance(v, datetime) else v.isoformat()
+    if isinstance(v, Decimal):
+        return str(v)
+    return v
+
+
+@router.get("/tabelas")
+@limiter.limit(LIMITE_ADMIN)
+def tabelas(request: Request, _: None = Depends(exige_admin), db: Session = Depends(get_db)):
+    return [{"nome": nome, "linhas": db.scalar(select(func.count()).select_from(t))}
+            for nome, t in sorted(_tabelas().items())]
+
+
+@router.get("/tabelas/{nome}")
+@limiter.limit("60/minute")
+def tabela(nome: str, request: Request, pagina: int = Query(1, ge=1, le=100000),
+           _: None = Depends(exige_admin), db: Session = Depends(get_db)):
+    t = _tabelas().get(nome)
+    if t is None:
+        raise HTTPException(404, "Tabela não encontrada.")
+    total = db.scalar(select(func.count()).select_from(t))
+    ordem = [c.desc() for c in t.primary_key.columns]              # mais recentes primeiro
+    linhas = db.execute(select(t).order_by(*ordem).limit(POR_PAGINA).offset((pagina - 1) * POR_PAGINA)).mappings()
+    return {"tabela": nome, "colunas": [c.name for c in t.columns], "chave": [c.name for c in t.primary_key.columns],
+            "pode_apagar": nome not in PROTEGIDAS, "total": total,
+            "pagina": pagina, "por_pagina": POR_PAGINA,
+            "linhas": [{k: _valor(v) for k, v in linha.items()} for linha in linhas]}
+
+
+PROTEGIDAS = {"tb_status"}                                  # ids fixos usados no código
+SENHA_DO_DONO = {"tb_alunos": SenhaAluno, "tb_gestores": SenhaGestor}
+
+
+class ApagarIn(BaseModel):
+    chave: dict[str, int | str]                             # valor da chave primária, coluna por coluna
+
+
+@router.post("/tabelas/{nome}/apagar")
+@limiter.limit("60/minute")
+def apagar(nome: str, dados: ApagarIn, request: Request, _: None = Depends(exige_admin),
+           db: Session = Depends(get_db)):
+    """Apaga um registro. Se outro registro ainda depende dele, recusa e diz onde (não apaga em cascata)."""
+    t = _tabelas().get(nome)
+    if t is None:
+        raise HTTPException(404, "Tabela não encontrada.")
+    if nome in PROTEGIDAS:
+        raise HTTPException(422, "Esta tabela é usada pelo sistema e não pode ser alterada.")
+    pk = list(t.primary_key.columns)
+    if set(dados.chave) != {c.name for c in pk}:
+        raise HTTPException(422, "Chave do registro incompleta.")
+    filtro = [c == dados.chave[c.name] for c in pk]
+    linha = db.execute(select(t).where(*filtro)).mappings().first()
+    if not linha:
+        raise HTTPException(404, "Registro não encontrado.")
+
+    # Quem ainda aponta para este registro? (as senhas, ocultas, vão junto com o dono)
+    usos = []
+    for outra in Base.metadata.tables.values():
+        if outra.name in OCULTAS:
+            continue
+        for fk in outra.foreign_keys:
+            if fk.column.table is t:
+                n = db.scalar(select(func.count()).select_from(outra).where(fk.parent == linha[fk.column.name]))
+                if n:
+                    usos.append(f"{outra.name} ({n})")
+    if usos:
+        raise HTTPException(409, "Este registro ainda é usado em: " + ", ".join(usos) + ". Apague esses registros antes.")
+
+    try:
+        if nome in SENHA_DO_DONO:
+            senha = SENHA_DO_DONO[nome]
+            db.execute(delete(senha).where(list(senha.__table__.primary_key.columns)[0] == linha["id"]))
+        db.execute(delete(t).where(*filtro))
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(409, "O banco recusou: o registro ainda é usado em outra tabela.")
+    if nome == "tb_anexos":                                    # o arquivo some junto com o registro
+        (UPLOAD_DIR / Path(linha["caminho"]).name).unlink(missing_ok=True)
+    log.warning("Administração apagou %s %s", nome, dados.chave)
+    return {"ok": True}
 
 
 @router.put("/coordenadores/{id_gestor}")

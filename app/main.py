@@ -7,7 +7,7 @@ from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 
-from .config import API_DOCS, FRONTEND_DIR, SECRET_KEY
+from .config import API_DOCS, FRONTEND_DIR, MODO_APRESENTACAO, SECRET_KEY
 from .database import IS_SQLITE, Base, SessionLocal, engine
 from .protecao import cabecalhos_e_tamanho, limite_estourado, limiter
 from .routers import admin, agenda, agendamentos, auth, motivos, senha
@@ -60,7 +60,8 @@ for r in (auth.router, senha.router, motivos.router, agenda.router, agendamentos
 
 @app.get("/api/saude", tags=["sistema"])
 def saude():
-    return {"ok": True}
+    # "apresentacao" liga o atalho para a administração no topo da tela
+    return {"ok": True, "apresentacao": MODO_APRESENTACAO}
 
 
 # As telas (frontend/) são servidas pelo próprio FastAPI, na raiz do site

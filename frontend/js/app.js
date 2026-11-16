@@ -30,6 +30,12 @@ $("#btn-ouvir").addEventListener("click", () => {
   b.setAttribute("aria-pressed", "true"); b.textContent = "Parar leitura";
   speechSynthesis.speak(fala);
 });
+// "Ir para o conteúdo": as telas usam o # da URL como rota, então o link só move o foco
+$('a[href="#conteudo"]').addEventListener("click", e => {
+  e.preventDefault();
+  $("#conteudo").focus();
+  $("#conteudo").scrollIntoView();
+});
 $("#btn-sair").addEventListener("click", async () => {
   await api("POST", "/api/logout").catch(() => {});
   USER = null; ir("login");
@@ -270,6 +276,59 @@ VIEWS.redefinir = async main => {
    Administração (tela escondida #admin): criar coordenador e definir disciplinas
    ===================================================================== */
 let CHAVE_ADMIN = "";   // só na memória: some ao recarregar a página
+let ABA_ADMIN = "coord";
+const ESTADO_BANCO = { tabela: null, pagina: 1 };
+
+/* Banco de dados: lista as tabelas e abre uma de cada vez, com opção de apagar registros */
+async function visualizadorBanco(el, cab) {
+  const tabelas = await api("GET", "/api/admin/tabelas", undefined, cab);
+  if (!ESTADO_BANCO.tabela) ESTADO_BANCO.tabela = tabelas[0]?.nome;
+  el.innerHTML = `<div class="row g-3">
+    <div class="col-lg-3"><div class="painel"><div class="list-group list-group-flush">${tabelas.map(t => `
+      <button type="button" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center small ${t.nome === ESTADO_BANCO.tabela ? "active" : ""}" data-tab="${esc(t.nome)}" title="${esc(t.nome)}">
+        <span class="text-truncate">${esc(t.nome)}</span><span class="badge text-bg-secondary rounded-pill">${t.linhas}</span></button>`).join("")}
+    </div></div><p class="small text-body-secondary mt-2">As senhas não aparecem aqui.</p></div>
+    <div class="col-lg-9" id="banco-tabela"></div></div>`;
+  $$("[data-tab]", el).forEach(b => b.addEventListener("click", () => {
+    ESTADO_BANCO.tabela = b.dataset.tab; ESTADO_BANCO.pagina = 1; visualizadorBanco(el, cab);
+  }));
+  if (ESTADO_BANCO.tabela) await mostraTabela($("#banco-tabela", el), cab, () => visualizadorBanco(el, cab));
+}
+
+async function mostraTabela(el, cab, recarrega) {
+  const { tabela, pagina } = ESTADO_BANCO;
+  const r = await api("GET", `/api/admin/tabelas/${encodeURIComponent(tabela)}?pagina=${pagina}`, undefined, cab);
+  const paginas = Math.max(1, Math.ceil(r.total / r.por_pagina));
+  const celula = v => v === null ? `<span class="text-body-secondary">—</span>` : typeof v === "boolean" ? (v ? "sim" : "não") : esc(v);
+  const chaveDe = linha => Object.fromEntries(r.chave.map(c => [c, linha[c]]));   // colunas da chave primária
+  el.innerHTML = `<div class="painel">
+    <div class="painel-cab d-flex flex-wrap align-items-center gap-2"><span class="me-auto">${esc(tabela)}</span>
+      <span class="small fw-normal text-body-secondary">${r.total} registro(s) · página ${pagina} de ${paginas}</span></div>
+    <div class="table-responsive"><table class="table tabela table-sm align-middle mb-0 banco">
+      <thead><tr>${r.colunas.map(c => `<th>${esc(c)}</th>`).join("")}<th></th></tr></thead><tbody>
+      ${r.linhas.length ? r.linhas.map((l, i) => `<tr>${r.colunas.map(c => `<td title="${esc(l[c] ?? "")}">${celula(l[c])}</td>`).join("")}
+        <td class="text-end">${r.pode_apagar ? `<button class="btn btn-sm btn-link text-danger p-0" data-apagar="${i}">Apagar</button>` : ""}</td></tr>`).join("")
+        : linhaVazia(r.colunas.length + 1, "Tabela vazia.")}
+      </tbody></table></div>
+    <div class="d-flex justify-content-between p-2 border-top">
+      <button class="btn btn-sm btn-outline-secondary" id="pg-ant" ${pagina <= 1 ? "disabled" : ""}>Anterior</button>
+      <button class="btn btn-sm btn-outline-secondary" id="pg-prox" ${pagina >= paginas ? "disabled" : ""}>Próxima</button></div></div>`;
+  $("#pg-ant", el).addEventListener("click", () => { ESTADO_BANCO.pagina--; mostraTabela(el, cab, recarrega); });
+  $("#pg-prox", el).addEventListener("click", () => { ESTADO_BANCO.pagina++; mostraTabela(el, cab, recarrega); });
+  $$("[data-apagar]", el).forEach(b => b.addEventListener("click", () => {
+    const linha = r.linhas[Number(b.dataset.apagar)], chave = chaveDe(linha);
+    dialogo({
+      titulo: "Apagar registro",
+      corpo: `<p>Apagar este registro de <b>${esc(tabela)}</b>? Não dá para desfazer.</p>
+        <dl class="dados small">${r.colunas.slice(0, 6).map(c => `<dt>${esc(c)}</dt><dd>${celula(linha[c])}</dd>`).join("")}</dl>`,
+      rodape: `<button class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button><button class="btn btn-danger" id="ok">Apagar</button>`,
+      aoAbrir: (d, fechar) => $("#ok", d).addEventListener("click", ev => comCarregando(ev.currentTarget, async () => {
+        try { await api("POST", `/api/admin/tabelas/${encodeURIComponent(tabela)}/apagar`, { chave }, cab); fechar(); toast("Registro apagado."); recarrega(); }
+        catch (er) { fechar(); toast(erroTexto(er), true); }
+      })),
+    });
+  }));
+}
 
 VIEWS.admin = async main => {
   if (!CHAVE_ADMIN) {
@@ -299,6 +358,12 @@ VIEWS.admin = async main => {
 
   main.innerHTML = `<div>
   ${titulo("Administração", `<button class="btn btn-outline-secondary btn-sm" id="a-sair">Sair da administração</button>`)}
+  <ul class="nav nav-tabs mb-3" role="tablist">
+    <li class="nav-item"><button class="nav-link ${ABA_ADMIN === "coord" ? "active" : ""}" data-aba="coord" type="button">Coordenadores</button></li>
+    <li class="nav-item"><button class="nav-link ${ABA_ADMIN === "banco" ? "active" : ""}" data-aba="banco" type="button">Banco de dados</button></li>
+  </ul>
+  <div id="aba-banco" ${ABA_ADMIN === "banco" ? "" : "hidden"}></div>
+  <div id="aba-coord" ${ABA_ADMIN === "coord" ? "" : "hidden"}>
   <h2 class="subtitulo">Coordenadores</h2>
   <div class="painel mb-4"><table class="table tabela tabela-responsiva align-middle">
     <thead><tr><th>Nome</th><th>Cursos</th><th>Disciplinas</th><th>Limite</th><th></th></tr></thead><tbody>
@@ -319,7 +384,14 @@ VIEWS.admin = async main => {
     <div class="mt-3" id="n-vinc">${vinculosHtml("n", dados)}</div>
     <div id="n-erro" class="alert alert-danger py-2 small mt-3" role="alert" hidden></div>
     <div class="text-end mt-3"><button class="btn btn-primary" type="submit">Criar coordenador</button></div>
-  </div></form></div>`;
+  </div></form></div></div>`;
+  $$("[data-aba]").forEach(b => b.addEventListener("click", () => {
+    ABA_ADMIN = b.dataset.aba;
+    $$("[data-aba]").forEach(x => x.classList.toggle("active", x === b));
+    $("#aba-coord").hidden = ABA_ADMIN !== "coord"; $("#aba-banco").hidden = ABA_ADMIN !== "banco";
+    if (ABA_ADMIN === "banco") visualizadorBanco($("#aba-banco"), cab);
+  }));
+  if (ABA_ADMIN === "banco") visualizadorBanco($("#aba-banco"), cab);
   ligaVinculos($("#n-vinc"));
   Mascaras.email($("#n-email"));
   $("#a-sair").addEventListener("click", () => { CHAVE_ADMIN = ""; ir("login"); });
@@ -904,6 +976,7 @@ VIEWS.motivos = async main => {
   aplicaFonte(Number(store.get("fonte", 16)));
   DEMO = await detectaModo();
   $("#faixa-demo").hidden = !DEMO;
+  $("#atalho-admin").hidden = !APRESENTACAO;
   try { USER = await api("GET", "/api/me"); } catch { USER = null; }
   render();
 })();

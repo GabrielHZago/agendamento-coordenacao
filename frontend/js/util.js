@@ -97,10 +97,13 @@ async function api(metodo, caminho, corpo, cabecalhos = {}) {
   return dados;
 }
 
+let APRESENTACAO = false;   // servidor com MODO_APRESENTACAO=1: mostra o atalho para a administração
+
 async function detectaModo() {
   if (location.search.includes("demo")) return true;
   try {
     const r = await fetch("/api/saude", { credentials: "same-origin" });
+    if (r.ok) APRESENTACAO = Boolean((await r.json()).apresentacao);
     return !r.ok;
   } catch { return true; }
 }

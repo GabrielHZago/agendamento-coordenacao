@@ -18,7 +18,7 @@
 #   SEED_DEMO    1 = cria dados de demonstração (padrão), 0 = não cria
 #   ADMIN_KEY    chave da tela #admin (se faltar, é gerada e mantida nas próximas instalações)
 #   SMTP_HOST SMTP_PORT SMTP_USER SMTP_PASSWORD SMTP_FROM   e-mail do "Esqueci a senha"
-#   RECUPERACAO_MOSTRA_LINK=1   mostra o link de redefinição na tela (só para apresentação)
+#   MODO_APRESENTACAO=1   atalho para #admin e link de "Esqueci a senha" na tela (só para apresentação)
 #   REPO_URL / REPO_BRANCH   de onde baixar o projeto na forma (a)
 #   APP_DIR, APP_PORT, DB_NAME, DB_APP_USER
 #
@@ -285,11 +285,15 @@ tar -C "$ORIGEM" --exclude=.git --exclude=.venv --exclude=__pycache__ --exclude=
 do_env_antigo() { grep -s "^$1=" "$APP_DIR/.env" | head -1 | cut -d= -f2- | sed 's/^"//; s/"$//' || true; }
 SECRET_KEY="$(do_env_antigo SECRET_KEY)"; [[ -n "$SECRET_KEY" ]] || SECRET_KEY="$(openssl rand -hex 32)"
 ADMIN_KEY="${ADMIN_KEY:-$(do_env_antigo ADMIN_KEY)}"; [[ -n "$ADMIN_KEY" ]] || ADMIN_KEY="$(openssl rand -hex 8)"
-for v in SMTP_HOST SMTP_PORT SMTP_USER SMTP_PASSWORD SMTP_FROM RECUPERACAO_MOSTRA_LINK; do
+for v in SMTP_HOST SMTP_PORT SMTP_USER SMTP_PASSWORD SMTP_FROM; do
   [[ -n "${!v:-}" ]] || printf -v "$v" '%s' "$(do_env_antigo "$v")"
 done
 SMTP_PORT="${SMTP_PORT:-587}"
-RECUPERACAO_MOSTRA_LINK="${RECUPERACAO_MOSTRA_LINK:-0}"
+# Modo apresentação (RECUPERACAO_MOSTRA_LINK é o nome antigo, ainda aceito)
+MODO_APRESENTACAO="${MODO_APRESENTACAO:-${RECUPERACAO_MOSTRA_LINK:-}}"
+[[ -n "$MODO_APRESENTACAO" ]] || MODO_APRESENTACAO="$(do_env_antigo MODO_APRESENTACAO)"
+[[ -n "$MODO_APRESENTACAO" ]] || MODO_APRESENTACAO="$(do_env_antigo RECUPERACAO_MOSTRA_LINK)"
+MODO_APRESENTACAO="${MODO_APRESENTACAO:-0}"
 
 cat > "$APP_DIR/.env" <<EOF
 # Gerado por instalar.sh em $(date '+%d/%m/%Y %H:%M')
@@ -306,11 +310,13 @@ SMTP_PORT=${SMTP_PORT}
 SMTP_USER=${SMTP_USER}
 SMTP_PASSWORD="${SMTP_PASSWORD}"
 SMTP_FROM=${SMTP_FROM}
-# 1 = mostra o link de redefinição na tela (só para apresentação, NUNCA em produção)
-RECUPERACAO_MOSTRA_LINK=${RECUPERACAO_MOSTRA_LINK}
+# 1 = atalho para #admin e link de "Esqueci a senha" na tela (só para apresentação, NUNCA em produção)
+MODO_APRESENTACAO=${MODO_APRESENTACAO}
 EOF
 chown -R "$APP_USER":"$APP_USER" "$APP_DIR"
 chmod 600 "$APP_DIR/.env"
+# Comando para alterar o .env pelo terminal: sudo agendamento-config
+install -m 755 "$ORIGEM/ferramentas/agendamento-config.sh" /usr/local/bin/agendamento-config
 chmod 750 "$APP_DIR/uploads"
 
 # Dados de demonstração (curso, coordenador, alunos, escala). Para pular: SEED_DEMO=0
@@ -511,6 +517,7 @@ echo "  Logins de teste:       coordenacao@demo.edu / Coord2026!   |   aluno RA 
 echo "  Criar coordenador:     ${URL}/#admin   (chave: ${ADMIN_KEY})"
 if [[ -n "$SMTP_HOST" ]]; then echo "  E-mail (esqueci a senha): enviando por ${SMTP_HOST}:${SMTP_PORT}"
 else amarelo "  E-mail não configurado: o link de \"Esqueci a senha\" vai para o log (sudo journalctl -u agendamento | grep redefini)"; fi
-[[ "$RECUPERACAO_MOSTRA_LINK" == "1" ]] && amarelo "  Modo apresentação ligado: o link de redefinição aparece na tela. Desligue fora da apresentação."
+[[ "$MODO_APRESENTACAO" == "1" ]] && amarelo "  Modo apresentação LIGADO (atalho para a administração e link de senha na tela). Desligue depois."
+echo "  Alterar chaves, e-mail e senhas:  sudo agendamento-config"
 echo
 amarelo "Guarde a senha do sa. A senha do usuário do sistema está em ${APP_DIR}/.env"
