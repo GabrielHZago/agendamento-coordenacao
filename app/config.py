@@ -28,7 +28,24 @@ LOGIN_BLOQUEIO_MIN = 15
 MAX_ARQUIVOS = 5                 # anexos por pedido
 
 # Documentação interativa da API (/docs): ligada no desenvolvimento, desligada na VM
-API_DOCS = os.getenv("API_DOCS", "1" if DATABASE_URL.startswith("sqlite") else "0") == "1"
+DESENVOLVIMENTO = DATABASE_URL.startswith("sqlite")
+API_DOCS = os.getenv("API_DOCS", "1" if DESENVOLVIMENTO else "0") == "1"
+
+# Tela escondida #admin (criar coordenador). Na VM o instalar.sh gera a chave; vazia = tela desligada.
+ADMIN_KEY = os.getenv("ADMIN_KEY", "dev" if DESENVOLVIMENTO else "")
+LIMITE_ADMIN = "10/minute"         # tentativas de chave por cliente
+
+# "Esqueci a senha": link assinado enviado por e-mail (SMTP). Sem SMTP, o link vai só para o log.
+SMTP_HOST = os.getenv("SMTP_HOST", "")
+SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))       # 587 = STARTTLS; 465 = SSL direto
+SMTP_USER = os.getenv("SMTP_USER", "")
+SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "")
+SMTP_FROM = os.getenv("SMTP_FROM", SMTP_USER)
+RECUPERACAO_VALIDADE_MIN = 30
+LIMITE_RECUPERACAO = "5/hour"
+# Modo apresentação: devolve o link na própria tela (a rede da faculdade pode bloquear o e-mail).
+# NUNCA ligue em produção: qualquer um redefiniria a senha de qualquer e-mail.
+RECUPERACAO_MOSTRA_LINK = os.getenv("RECUPERACAO_MOSTRA_LINK", "1" if DESENVOLVIMENTO else "0") == "1"
 
 # Status (tb_status)
 PENDENTE, APROVADA, RECUSADA, CANCELADA, REALIZADA = 1, 2, 3, 4, 5

@@ -110,6 +110,25 @@ uvicorn app.main:app --reload --port 8000
 pytest                          # testes automatizados
 ```
 
+## Criar contas da coordenação (tela escondida)
+
+Abra `http://IP-DA-VM/#admin` e informe a **chave de administração**, mostrada no fim da instalação
+e guardada em `/opt/agendamento/.env` (`ADMIN_KEY`). Ali se cria o coordenador e se definem os cursos e
+as disciplinas que ele atende; o coordenador só consulta essa lista. No desenvolvimento (SQLite) a chave é `dev`.
+
+## Esqueci a senha
+
+O link de redefinição vai por e-mail, vale 30 minutos e só funciona uma vez (não precisa de tabela no banco:
+o link é assinado com a `SECRET_KEY`). Para enviar e-mail, informe o servidor SMTP na instalação:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/GabrielHZago/agendamento-coordenacao/main/instalar.sh   | sudo SMTP_HOST=smtp.gmail.com SMTP_USER=conta@gmail.com SMTP_PASSWORD='senha de app' bash
+```
+
+Sem SMTP, o link aparece no log: `sudo journalctl -u agendamento | grep redefini`.
+**Na apresentação**, se a rede bloquear e-mail, instale com `RECUPERACAO_MOSTRA_LINK=1` para o link
+aparecer na própria tela. Nunca deixe ligado fora da apresentação.
+
 ## Comandos úteis
 
 | Para | Comando |

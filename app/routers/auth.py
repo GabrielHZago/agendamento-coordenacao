@@ -12,7 +12,7 @@ from ..database import get_db
 from ..models import Aluno, Curso, Disciplina, Gestor, SenhaAluno, SenhaGestor
 from ..protecao import limiter
 from ..security import (checa_bloqueio, confere_senha, exige_login, hash_senha,
-                        limpa_falhas, registra_falha, senha_falsa, usuario)
+                        limpa_falhas, registra_falha, senha_falsa, usuario, valida_senha)
 
 router = APIRouter(prefix="/api", tags=["acesso"])
 
@@ -82,11 +82,7 @@ class CadastroIn(BaseModel):
     @field_validator("senha")
     @classmethod
     def senha_forte(cls, v: str) -> str:
-        if not (re.search(r"[A-Za-z]", v) and re.search(r"\d", v)):
-            raise ValueError("A senha precisa ter letras e números")
-        if len(v.encode("utf-8")) > 72:   # limite do bcrypt (a versão 5 recusa senhas maiores)
-            raise ValueError("A senha pode ter no máximo 72 caracteres")
-        return v
+        return valida_senha(v)
 
 
 @router.post("/alunos", status_code=201)

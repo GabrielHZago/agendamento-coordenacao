@@ -78,25 +78,11 @@ def remove_escala(id_escala: int, u: dict = Depends(exige_gestor), db: Session =
     return {"ok": True}
 
 
-# ---------- Disciplinas atendidas (RF07, RN16) ----------
-class DisciplinasIn(BaseModel):
-    ids: list[int]
-
-
+# ---------- Disciplinas atendidas (RF07, RN16): definidas na tela de administração ----------
 @router.get("/minhas-disciplinas")
 def minhas_disciplinas(u: dict = Depends(exige_gestor), db: Session = Depends(get_db)):
     g = db.get(Gestor, u["id"])
     return {"max": g.max_disciplinas, "disciplinas": [{"id": d.id, "nome": d.nome} for d in g.disciplinas]}
-
-
-@router.put("/minhas-disciplinas")
-def define_disciplinas(dados: DisciplinasIn, u: dict = Depends(exige_gestor), db: Session = Depends(get_db)):
-    g = db.get(Gestor, u["id"])
-    if g.max_disciplinas and len(dados.ids) > g.max_disciplinas:
-        raise HTTPException(422, f"Você pode atender no máximo {g.max_disciplinas} disciplinas.")
-    g.disciplinas = list(db.scalars(select(Disciplina).where(Disciplina.id.in_(dados.ids))))
-    db.commit()
-    return {"ok": True}
 
 
 # ---------- Reservas do coordenador (almoço, compromisso, emergência) ----------

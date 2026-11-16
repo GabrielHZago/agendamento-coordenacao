@@ -16,6 +16,9 @@
 # Variáveis opcionais (ex.: curl ... | sudo SA_PASSWORD='Senha#Forte1' SEED_DEMO=0 bash):
 #   SA_PASSWORD  senha do administrador do SQL Server (se faltar, é perguntada)
 #   SEED_DEMO    1 = cria dados de demonstração (padrão), 0 = não cria
+#   ADMIN_KEY    chave da tela #admin (se faltar, é gerada e mantida nas próximas instalações)
+#   SMTP_HOST SMTP_PORT SMTP_USER SMTP_PASSWORD SMTP_FROM   e-mail do "Esqueci a senha"
+#   RECUPERACAO_MOSTRA_LINK=1   mostra o link de redefinição na tela (só para apresentação)
 #   REPO_URL / REPO_BRANCH   de onde baixar o projeto na forma (a)
 #   APP_DIR, APP_PORT, DB_NAME, DB_APP_USER
 #
@@ -253,7 +256,6 @@ fi
 
 # Senha do usuário do banco: só letras e números (entra numa URL no .env sem precisar de escape)
 DB_APP_PASSWORD="$(openssl rand -hex 16)Aa1"
-SECRET_KEY="$(openssl rand -hex 32)"
 
 # Usuário do sistema: lê e grava dados, mas não altera a estrutura do banco (RNF14)
 sa_sql -b -Q "
@@ -278,6 +280,17 @@ tar -C "$ORIGEM" --exclude=.git --exclude=.venv --exclude=__pycache__ --exclude=
 "$APP_DIR/.venv/bin/pip" install --quiet --upgrade pip
 "$APP_DIR/.venv/bin/pip" install --quiet -r "$APP_DIR/requirements.txt"
 
+# Valores mantidos ao rodar de novo: chave secreta (ninguém é deslogado), chave de admin e e-mail.
+# Passados na linha de comando (ex.: SMTP_HOST=...) têm preferência sobre o .env antigo.
+do_env_antigo() { grep -s "^$1=" "$APP_DIR/.env" | head -1 | cut -d= -f2- | sed 's/^"//; s/"$//' || true; }
+SECRET_KEY="$(do_env_antigo SECRET_KEY)"; [[ -n "$SECRET_KEY" ]] || SECRET_KEY="$(openssl rand -hex 32)"
+ADMIN_KEY="${ADMIN_KEY:-$(do_env_antigo ADMIN_KEY)}"; [[ -n "$ADMIN_KEY" ]] || ADMIN_KEY="$(openssl rand -hex 8)"
+for v in SMTP_HOST SMTP_PORT SMTP_USER SMTP_PASSWORD SMTP_FROM RECUPERACAO_MOSTRA_LINK; do
+  [[ -n "${!v:-}" ]] || printf -v "$v" '%s' "$(do_env_antigo "$v")"
+done
+SMTP_PORT="${SMTP_PORT:-587}"
+RECUPERACAO_MOSTRA_LINK="${RECUPERACAO_MOSTRA_LINK:-0}"
+
 cat > "$APP_DIR/.env" <<EOF
 # Gerado por instalar.sh em $(date '+%d/%m/%Y %H:%M')
 DATABASE_URL=mssql+pyodbc://${DB_APP_USER}:${DB_APP_PASSWORD}@localhost:1433/${DB_NAME}?driver=ODBC+Driver+18+for+SQL+Server&TrustServerCertificate=yes
@@ -285,6 +298,16 @@ SECRET_KEY=${SECRET_KEY}
 UPLOAD_DIR=${APP_DIR}/uploads
 UPLOAD_MAX_MB=5
 API_DOCS=0
+# Tela escondida http://IP/#admin (criar coordenador)
+ADMIN_KEY=${ADMIN_KEY}
+# "Esqueci a senha": servidor de e-mail. Ex. Gmail: smtp.gmail.com, 587, conta e "senha de app"
+SMTP_HOST=${SMTP_HOST}
+SMTP_PORT=${SMTP_PORT}
+SMTP_USER=${SMTP_USER}
+SMTP_PASSWORD="${SMTP_PASSWORD}"
+SMTP_FROM=${SMTP_FROM}
+# 1 = mostra o link de redefinição na tela (só para apresentação, NUNCA em produção)
+RECUPERACAO_MOSTRA_LINK=${RECUPERACAO_MOSTRA_LINK}
 EOF
 chown -R "$APP_USER":"$APP_USER" "$APP_DIR"
 chmod 600 "$APP_DIR/.env"
@@ -485,5 +508,9 @@ echo "  Ver os logs:           sudo journalctl -u agendamento -f"
 echo "  Atualizar o código:    rode este mesmo comando de novo"
 [[ "${SEED_DEMO:-1}" == "1" ]] && \
 echo "  Logins de teste:       coordenacao@demo.edu / Coord2026!   |   aluno RA 1234567 / Aluno2026!"
+echo "  Criar coordenador:     ${URL}/#admin   (chave: ${ADMIN_KEY})"
+if [[ -n "$SMTP_HOST" ]]; then echo "  E-mail (esqueci a senha): enviando por ${SMTP_HOST}:${SMTP_PORT}"
+else amarelo "  E-mail não configurado: o link de \"Esqueci a senha\" vai para o log (sudo journalctl -u agendamento | grep redefini)"; fi
+[[ "$RECUPERACAO_MOSTRA_LINK" == "1" ]] && amarelo "  Modo apresentação ligado: o link de redefinição aparece na tela. Desligue fora da apresentação."
 echo
 amarelo "Guarde a senha do sa. A senha do usuário do sistema está em ${APP_DIR}/.env"

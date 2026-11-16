@@ -48,10 +48,13 @@ function ir(rota) { if (location.hash.slice(1) === rota) render(); else location
 
 async function render() {
   speechSynthesis?.cancel?.();
-  let rota = location.hash.slice(1) || "inicio";
-  if (!USER && !["login", "cadastro"].includes(rota)) rota = "login";
-  if (USER && ["login", "cadastro", "inicio"].includes(rota)) rota = USER.perfil === "aluno" ? "meus" : "agenda";
-  if (USER && !MENUS[USER.perfil].some(([r]) => r === rota)) rota = MENUS[USER.perfil][0][0];
+  let rota = location.hash.slice(1).split("?")[0] || "inicio";      // "#redefinir?t=..." -> "redefinir"
+  const SEMPRE = ["redefinir", "admin"];                              // abrem com ou sem login
+  if (!SEMPRE.includes(rota)) {
+    if (!USER && !["login", "cadastro", "esqueci"].includes(rota)) rota = "login";
+    if (USER && ["login", "cadastro", "esqueci", "inicio"].includes(rota)) rota = USER.perfil === "aluno" ? "meus" : "agenda";
+    if (USER && !MENUS[USER.perfil].some(([r]) => r === rota)) rota = MENUS[USER.perfil][0][0];
+  }
 
   $("#usuario").hidden = $("#nav").hidden = !USER;
   if (USER) {
@@ -96,7 +99,8 @@ VIEWS.login = async main => {
           <input class="form-control" id="l-login" autocomplete="username" required maxlength="254"></div>
         <div class="mb-3"><label for="l-senha" class="form-label">Senha</label>
           <div class="input-group"><input class="form-control" id="l-senha" type="password" autocomplete="current-password" required maxlength="72">
-            <button class="btn btn-outline-secondary" type="button" id="l-ver">Mostrar</button></div></div>
+            <button class="btn btn-outline-secondary" type="button" id="l-ver">Mostrar</button></div>
+          <a href="#esqueci" class="small d-inline-block mt-1">Esqueci minha senha</a></div>
         <div id="l-erro" class="alert alert-danger py-2 small" role="alert" hidden></div>
         <button class="btn btn-primary w-100" type="submit">Entrar</button>
         <p class="small mt-3 mb-0" id="l-extra"></p>
@@ -188,6 +192,193 @@ VIEWS.cadastro = async main => {
     });
   });
 };
+
+/* ---------- Esqueci a senha ---------- */
+VIEWS.esqueci = async main => {
+  let perfil = store.get("perfil", "aluno");
+  main.innerHTML = `
+  <div class="tela-acesso mx-auto">
+    <form class="painel" id="f-esq" novalidate>
+      <div class="painel-cab">Esqueci minha senha</div>
+      <div class="painel-corpo">
+        <p class="small">Informe o e-mail da sua conta. Vamos enviar um link para você criar uma senha nova.</p>
+        <div class="mb-3"><label class="form-label d-block">Tipo de conta</label>
+          <div class="form-check form-check-inline"><input class="form-check-input" type="radio" name="e-perfil" id="e-aluno" value="aluno"><label class="form-check-label" for="e-aluno">Aluno</label></div>
+          <div class="form-check form-check-inline"><input class="form-check-input" type="radio" name="e-perfil" id="e-coord" value="coordenador"><label class="form-check-label" for="e-coord">Coordenação</label></div></div>
+        <div class="mb-3"><label for="e-email" class="form-label">E-mail</label><input class="form-control" id="e-email" type="email" required autocomplete="email" maxlength="254">
+          <div class="invalid-feedback">Informe um e-mail válido.</div></div>
+        <div id="e-res" hidden></div>
+        <div class="d-flex gap-2"><a class="btn btn-outline-secondary" href="#login">Voltar</a><button class="btn btn-primary flex-grow-1" type="submit">Enviar link</button></div>
+      </div>
+    </form>
+  </div>`;
+  $(`[name=e-perfil][value=${perfil}]`).checked = true;
+  $$("[name=e-perfil]").forEach(r => r.addEventListener("change", () => { perfil = r.value; }));
+  Mascaras.email($("#e-email"));
+  $("#f-esq").addEventListener("submit", async e => {
+    e.preventDefault();
+    const email = $("#e-email");
+    email.classList.toggle("is-invalid", !email.value || !email.checkValidity());
+    if (email.classList.contains("is-invalid")) return email.focus();
+    await comCarregando($("button[type=submit]", e.target), async () => {
+      const res = $("#e-res");
+      try {
+        const r = await api("POST", "/api/senha/esqueci", { perfil, email: email.value.trim().toLowerCase() });
+        res.hidden = false;
+        res.innerHTML = `<div class="alert alert-success small">${esc(r.mensagem)}</div>
+          ${r.link ? `<div class="alert alert-warning small"><b>Modo apresentação:</b> o link aparece aqui porque o e-mail pode não chegar na rede da faculdade.<br><a href="${esc(r.link)}">Abrir o link de redefinição</a></div>` : ""}`;
+      } catch (er) { res.hidden = false; res.innerHTML = `<div class="alert alert-danger small">${esc(erroTexto(er))}</div>`; }
+    });
+  });
+};
+
+/* ---------- Criar senha nova (link do e-mail) ---------- */
+VIEWS.redefinir = async main => {
+  const token = new URLSearchParams(location.hash.split("?")[1] || "").get("t") || "";
+  main.innerHTML = `
+  <div class="tela-acesso mx-auto">
+    <form class="painel" id="f-red" novalidate>
+      <div class="painel-cab">Criar senha nova</div>
+      <div class="painel-corpo">
+        ${token ? "" : `<div class="alert alert-danger small">Link incompleto. Abra de novo o link do e-mail ou peça outro em <a href="#esqueci">Esqueci minha senha</a>.</div>`}
+        <div class="mb-3"><label for="r-senha" class="form-label">Senha nova</label><input class="form-control" id="r-senha" type="password" minlength="8" maxlength="72" autocomplete="new-password">
+          <div class="form-text" id="r-forca">Mínimo de 8 caracteres, com letras e números.</div></div>
+        <div class="mb-3"><label for="r-conf" class="form-label">Repita a senha</label><input class="form-control" id="r-conf" type="password" maxlength="72" autocomplete="new-password">
+          <div class="invalid-feedback">As senhas não conferem.</div></div>
+        <div id="r-erro" class="alert alert-danger py-2 small" role="alert" hidden></div>
+        <button class="btn btn-primary w-100" type="submit" ${token ? "" : "disabled"}>Salvar senha</button>
+      </div>
+    </form>
+  </div>`;
+  $("#f-red").addEventListener("submit", async e => {
+    e.preventDefault();
+    const senha = $("#r-senha").value, ok = senha.length >= 8 && /[A-Za-z]/.test(senha) && /\d/.test(senha);
+    $("#r-senha").classList.toggle("is-invalid", !ok); $("#r-forca").classList.toggle("text-danger", !ok);
+    $("#r-conf").classList.toggle("is-invalid", ok && senha !== $("#r-conf").value);
+    if (!ok || senha !== $("#r-conf").value) return;
+    await comCarregando($("button[type=submit]", e.target), async () => {
+      try {
+        await api("POST", "/api/senha/redefinir", { token, senha });
+        toast("Senha alterada. Entre com a senha nova.");
+        history.replaceState(null, "", "#login"); USER = null; render();     // tira o link do histórico
+      } catch (er) { mostraErro($("#r-erro"), erroTexto(er)); }
+    });
+  });
+};
+
+/* =====================================================================
+   Administração (tela escondida #admin): criar coordenador e definir disciplinas
+   ===================================================================== */
+let CHAVE_ADMIN = "";   // só na memória: some ao recarregar a página
+
+VIEWS.admin = async main => {
+  if (!CHAVE_ADMIN) {
+    main.innerHTML = `
+    <div class="tela-acesso mx-auto">
+      <form class="painel" id="f-chave"><div class="painel-cab">Administração</div><div class="painel-corpo">
+        <p class="small">Área para criar contas da coordenação. A chave é mostrada no fim da instalação e fica no arquivo <code>.env</code> do servidor (ADMIN_KEY).</p>
+        <div class="mb-3"><label for="a-chave" class="form-label">Chave de administração</label><input class="form-control" id="a-chave" type="password" autocomplete="off" required></div>
+        <div id="a-erro" class="alert alert-danger py-2 small" role="alert" hidden></div>
+        <button class="btn btn-primary w-100" type="submit">Entrar</button>
+      </div></form>
+    </div>`;
+    $("#f-chave").addEventListener("submit", async e => {
+      e.preventDefault();
+      const chave = $("#a-chave").value.trim();
+      await comCarregando($("button[type=submit]", e.target), async () => {
+        try { await api("GET", "/api/admin/dados", undefined, { "X-Chave-Admin": chave }); CHAVE_ADMIN = chave; render(); }
+        catch (er) { mostraErro($("#a-erro"), er.status === 404 ? "A administração está desligada neste servidor (sem ADMIN_KEY)." : erroTexto(er)); }
+      });
+    });
+    return;
+  }
+  const cab = { "X-Chave-Admin": CHAVE_ADMIN };
+  const dados = await api("GET", "/api/admin/dados", undefined, cab);
+  const nomeCurso = id => dados.cursos.find(c => c.id === id)?.nome || "?";
+  const nomeDisc = id => dados.disciplinas.find(d => d.id === id)?.nome || "?";
+
+  main.innerHTML = `<div>
+  ${titulo("Administração", `<button class="btn btn-outline-secondary btn-sm" id="a-sair">Sair da administração</button>`)}
+  <h2 class="subtitulo">Coordenadores</h2>
+  <div class="painel mb-4"><table class="table tabela tabela-responsiva align-middle">
+    <thead><tr><th>Nome</th><th>Cursos</th><th>Disciplinas</th><th>Limite</th><th></th></tr></thead><tbody>
+    ${dados.coordenadores.map(g => `<tr>
+      <td data-l="Nome">${esc(g.nome)}<div class="small text-body-secondary">${esc(g.email)}</div></td>
+      <td data-l="Cursos" class="small">${g.cursos.map(c => esc(nomeCurso(c))).join(", ") || "—"}</td>
+      <td data-l="Disciplinas" class="small">${g.disciplinas.map(d => esc(nomeDisc(d))).join(", ") || "Todas do curso"}</td>
+      <td data-l="Limite">${g.max_disciplinas ?? "—"}</td>
+      <td class="text-md-end"><button class="btn btn-sm btn-outline-secondary" data-ed="${g.id}">Editar vínculos</button></td></tr>`).join("")}
+  </tbody></table></div>
+  <form class="painel" id="f-novo" novalidate><div class="painel-cab">Novo coordenador</div><div class="painel-corpo">
+    <div class="row g-3">
+      <div class="col-md-4"><label for="n-nome" class="form-label">Nome</label><input class="form-control" id="n-nome" maxlength="100" required></div>
+      <div class="col-md-4"><label for="n-email" class="form-label">E-mail institucional</label><input class="form-control" id="n-email" type="email" maxlength="254" required></div>
+      <div class="col-md-4"><label for="n-senha" class="form-label">Senha inicial</label><input class="form-control" id="n-senha" type="text" maxlength="72" autocomplete="off" required>
+        <div class="form-text">Mínimo de 8 caracteres, com letras e números. Ele pode trocar depois em "Esqueci minha senha".</div></div>
+    </div>
+    <div class="mt-3" id="n-vinc">${vinculosHtml("n", dados)}</div>
+    <div id="n-erro" class="alert alert-danger py-2 small mt-3" role="alert" hidden></div>
+    <div class="text-end mt-3"><button class="btn btn-primary" type="submit">Criar coordenador</button></div>
+  </div></form></div>`;
+  ligaVinculos($("#n-vinc"));
+  Mascaras.email($("#n-email"));
+  $("#a-sair").addEventListener("click", () => { CHAVE_ADMIN = ""; ir("login"); });
+  $("#f-novo").addEventListener("submit", async e => {
+    e.preventDefault();
+    await comCarregando($("button[type=submit]", e.target), async () => {
+      try {
+        await api("POST", "/api/admin/coordenadores", { nome: $("#n-nome").value.trim(), email: $("#n-email").value.trim().toLowerCase(),
+          senha: $("#n-senha").value, ...leVinculos($("#n-vinc")) }, cab);
+        toast("Coordenador criado. Ele já pode entrar pela aba Coordenação."); render();
+      } catch (er) { mostraErro($("#n-erro"), erroTexto(er)); }
+    });
+  });
+  $$("[data-ed]").forEach(b => b.addEventListener("click", () => {
+    const g = dados.coordenadores.find(x => x.id === Number(b.dataset.ed));
+    dialogo({
+      titulo: `Vínculos de ${esc(g.nome)}`, tamanho: "modal-lg",
+      corpo: `<div id="ed-vinc">${vinculosHtml("ed", dados, g)}</div>`,
+      rodape: `<button class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button><button class="btn btn-primary" id="ok">Salvar</button>`,
+      aoAbrir: (d, fechar) => {
+        ligaVinculos($("#ed-vinc", d));
+        $("#ok", d).addEventListener("click", ev => comCarregando(ev.currentTarget, async () => {
+          try { await api("PUT", `/api/admin/coordenadores/${g.id}`, leVinculos($("#ed-vinc", d)), cab); fechar(); toast("Vínculos salvos."); render(); }
+          catch (er) { toast(erroTexto(er), true); }
+        }));
+      },
+    });
+  }));
+};
+
+/* Cursos e disciplinas (agrupadas por curso) que o coordenador atende */
+function vinculosHtml(p, dados, sel = { cursos: [], disciplinas: [], max_disciplinas: null }) {
+  return `<div class="row g-3">
+    <div class="col-md-4"><div class="fw-semibold mb-1">Cursos</div>
+      ${dados.cursos.map(c => `<div class="form-check"><input class="form-check-input" type="checkbox" id="${p}-c${c.id}" data-curso="${c.id}" ${sel.cursos.includes(c.id) ? "checked" : ""}>
+        <label class="form-check-label" for="${p}-c${c.id}">${esc(c.nome)}</label></div>`).join("")}
+      <label for="${p}-max" class="form-label mt-3 mb-1">Limite de disciplinas <span class="text-body-secondary">(opcional)</span></label>
+      <input class="form-control" type="number" min="1" max="255" id="${p}-max" data-max value="${sel.max_disciplinas ?? ""}"></div>
+    <div class="col-md-8"><div class="fw-semibold mb-1">Disciplinas atendidas <span class="fw-normal small text-body-secondary">(nenhuma = atende todas do curso)</span></div>
+      ${dados.cursos.map(c => `<div class="small text-body-secondary mt-2" data-grupo="${c.id}">${esc(c.nome)}</div>
+        ${dados.disciplinas.filter(d => d.id_curso === c.id).map(d => `<div class="form-check form-check-inline" data-grupo="${c.id}">
+          <input class="form-check-input" type="checkbox" id="${p}-d${d.id}" data-disc="${d.id}" data-do-curso="${c.id}" ${sel.disciplinas.includes(d.id) ? "checked" : ""}>
+          <label class="form-check-label" for="${p}-d${d.id}">${esc(d.nome)}</label></div>`).join("")}`).join("")}
+    </div></div>`;
+}
+function ligaVinculos(el) {
+  const atualiza = () => {
+    const cursos = $$("[data-curso]:checked", el).map(i => i.dataset.curso);
+    $$("[data-do-curso]", el).forEach(i => { i.disabled = !cursos.includes(i.dataset.doCurso); if (i.disabled) i.checked = false; });
+  };
+  $$("[data-curso]", el).forEach(i => i.addEventListener("change", atualiza));
+  atualiza();
+}
+function leVinculos(el) {
+  const max = $("[data-max]", el).value;
+  return { cursos: $$("[data-curso]:checked", el).map(i => Number(i.dataset.curso)),
+           disciplinas: $$("[data-disc]:checked", el).map(i => Number(i.dataset.disc)),
+           max_disciplinas: max ? Number(max) : null };
+}
 
 /* =====================================================================
    Aluno: Meus pedidos
@@ -582,7 +773,7 @@ VIEWS.reunioes = async main => {
    Coordenador: Horários de atendimento (escala semanal)
    ===================================================================== */
 VIEWS.escala = async main => {
-  const [escalas, minhas, todas] = await Promise.all([api("GET", "/api/escalas"), api("GET", "/api/minhas-disciplinas"), api("GET", "/api/disciplinas")]);
+  const [escalas, minhas] = await Promise.all([api("GET", "/api/escalas"), api("GET", "/api/minhas-disciplinas")]);
   main.innerHTML = `<div>
   ${titulo("Horários de atendimento")}
   <p class="text-body-secondary small">Os alunos só podem agendar dentro destes horários. Para um intervalo fixo, como o almoço, cadastre dois períodos no mesmo dia.</p>
@@ -605,10 +796,9 @@ VIEWS.escala = async main => {
     </section>
     <section class="col-lg-5">
       <div class="painel"><div class="painel-cab">Disciplinas atendidas</div><div class="painel-corpo">
-        <p class="small text-body-secondary">Limite definido pela coordenação: ${minhas.max ?? "sem limite"}.</p>
-        ${todas.map(d => `<div class="form-check mb-1"><input class="form-check-input" type="checkbox" id="disc${d.id}" value="${d.id}" data-disc ${minhas.disciplinas.some(x => x.id === d.id) ? "checked" : ""}>
-          <label class="form-check-label" for="disc${d.id}">${esc(d.nome)}</label></div>`).join("")}
-        <button class="btn btn-outline-primary mt-2" id="b-disc">Salvar</button></div></div>
+        ${minhas.disciplinas.length ? `<ul class="mb-2 ps-3">${minhas.disciplinas.map(d => `<li>${esc(d.nome)}</li>`).join("")}</ul>`
+          : `<p class="mb-2">Nenhuma disciplina vinculada: os alunos do curso são atendidos por você em qualquer assunto.</p>`}
+        <p class="small text-body-secondary mb-0">Definidas pela administração do curso${minhas.max ? ` (limite de ${minhas.max})` : ""}. Para alterar, procure a secretaria acadêmica.</p></div></div>
     </section>
   </div></div>`;
   $$("[data-del]").forEach(b => b.addEventListener("click", async () => { await api("DELETE", `/api/escalas/${b.dataset.del}`); toast("Período removido."); render(); }));
@@ -617,10 +807,6 @@ VIEWS.escala = async main => {
     try { await api("POST", "/api/escalas", { dia_semana: Number($("#e-dia").value), hora_inicio: $("#e-ini").value, hora_fim: $("#e-fim").value, local: $("#e-loc").value.trim() }); toast("Período incluído."); render(); }
     catch (er) { toast(erroTexto(er), true); }
   });
-  $("#b-disc").addEventListener("click", e => comCarregando(e.currentTarget, async () => {
-    try { await api("PUT", "/api/minhas-disciplinas", { ids: $$("[data-disc]:checked").map(i => Number(i.value)) }); toast("Disciplinas salvas."); }
-    catch (er) { toast(erroTexto(er), true); }
-  }));
 };
 
 /* =====================================================================

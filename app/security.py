@@ -1,4 +1,5 @@
 """Senhas (bcrypt), sessão por perfil e bloqueio de tentativas de login (RNF05, RNF06, RNF13)."""
+import re
 import time
 
 import bcrypt
@@ -9,6 +10,15 @@ from .config import LOGIN_BLOQUEIO_MIN, LOGIN_MAX_TENTATIVAS
 
 def hash_senha(senha: str) -> str:
     return bcrypt.hashpw(senha.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+
+
+def valida_senha(v: str) -> str:
+    """Regra de senha usada no cadastro, na redefinição e na criação de coordenador."""
+    if len(v) < 8 or not (re.search(r"[A-Za-z]", v) and re.search(r"\d", v)):
+        raise ValueError("A senha precisa ter pelo menos 8 caracteres, com letras e números")
+    if len(v.encode("utf-8")) > 72:   # limite do bcrypt (a versão 5 recusa senhas maiores)
+        raise ValueError("A senha pode ter no máximo 72 caracteres")
+    return v
 
 
 def confere_senha(senha: str, senha_hash: str) -> bool:

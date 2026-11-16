@@ -105,6 +105,9 @@ const Mock = (() => {
       case "POST /api/alunos": return st.user = { id: 9, perfil: "aluno", nome: json.nome };
       case "GET /api/cursos": return st.cursos;
       case "GET /api/disciplinas": return st.disciplinas;
+      case "POST /api/senha/esqueci": return { mensagem: "Se o e-mail estiver cadastrado, enviamos um link para criar uma senha nova. (No modo demonstração nenhum e-mail é enviado.)" };
+      case "POST /api/senha/redefinir": erro(422, "No modo demonstração a senha não pode ser trocada.");
+      case "GET /api/admin/dados": erro(404, "Indisponível no modo demonstração.");
       case "GET /api/documentos": return st.documentos;
       case "POST /api/documentos": exige("coordenador"); {
         const nome = (json.nome || "").trim().replace(/\s+/g, " ");

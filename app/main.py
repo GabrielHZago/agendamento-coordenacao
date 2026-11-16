@@ -10,7 +10,7 @@ from starlette.middleware.sessions import SessionMiddleware
 from .config import API_DOCS, FRONTEND_DIR, SECRET_KEY
 from .database import IS_SQLITE, Base, SessionLocal, engine
 from .protecao import cabecalhos_e_tamanho, limite_estourado, limiter
-from .routers import agenda, agendamentos, auth, motivos
+from .routers import admin, agenda, agendamentos, auth, motivos, senha
 
 
 @asynccontextmanager
@@ -54,7 +54,7 @@ app.middleware("http")(cabecalhos_e_tamanho)
 app.add_middleware(SessionMiddleware, secret_key=SECRET_KEY, session_cookie="agendamento_sessao",
                    max_age=8 * 3600, same_site="strict", https_only=False)
 
-for r in (auth.router, motivos.router, agenda.router, agendamentos.router):
+for r in (auth.router, senha.router, motivos.router, agenda.router, agendamentos.router, admin.router):
     app.include_router(r)
 
 

@@ -85,9 +85,9 @@ const Mascaras = {
    ===================================================================== */
 let DEMO = false;
 
-async function api(metodo, caminho, corpo) {
+async function api(metodo, caminho, corpo, cabecalhos = {}) {
   if (DEMO) return Mock.chamar(metodo, caminho, corpo);
-  const opt = { method: metodo, credentials: "same-origin", headers: { "X-Requested-With": "fetch" } };
+  const opt = { method: metodo, credentials: "same-origin", headers: { "X-Requested-With": "fetch", ...cabecalhos } };
   if (corpo instanceof FormData) opt.body = corpo;
   else if (corpo !== undefined) { opt.headers["Content-Type"] = "application/json"; opt.body = JSON.stringify(corpo); }
   const r = await fetch(caminho, opt);
