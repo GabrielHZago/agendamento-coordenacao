@@ -30,7 +30,7 @@ $("#btn-ouvir").addEventListener("click", () => {
   b.setAttribute("aria-pressed", "true"); b.textContent = "Parar leitura";
   speechSynthesis.speak(fala);
 });
-// "Ir para o conteúdo" (Alt+1): as telas usam o # da URL como rota, então o link não navega;
+// "Ir para o conteúdo": as telas usam o # da URL como rota, então o link não navega;
 // leva o foco ao primeiro campo da tela ou, se não houver, ao título, e destaca o ponto de chegada.
 $('a[href="#conteudo"]').addEventListener("click", e => {
   e.preventDefault();
