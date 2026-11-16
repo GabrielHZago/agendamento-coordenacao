@@ -140,3 +140,22 @@ def test_admin_nao_mexe_em_status_nem_senhas(client_anonimo):
     assert apaga(client_anonimo, "tb_status", id=1).status_code == 422
     assert apaga(client_anonimo, "tb_senhas_alunos", id_aluno=1).status_code == 404
     assert client_anonimo.post("/api/admin/tabelas/tb_escalas/apagar", json={"chave": {"id": 1}}).status_code == 403
+
+
+def test_admin_bloqueia_apos_5_chaves_erradas(client_anonimo):
+    for _ in range(5):
+        assert client_anonimo.get("/api/admin/tabelas", headers={"X-Chave-Admin": "chute"}).status_code == 403
+    assert client_anonimo.get("/api/admin/tabelas", headers=ADMIN).status_code == 429     # bloqueado, mesmo com a certa
+
+
+def test_admin_navega_rapido_com_a_chave_certa(client_anonimo):
+    from app.protecao import limiter
+    limiter.enabled = True
+    limiter.reset()
+    try:
+        tabelas = [t["nome"] for t in client_anonimo.get("/api/admin/tabelas", headers=ADMIN).json()]
+        for nome in tabelas * 2:                      # ~34 trocas de tabela seguidas
+            assert client_anonimo.get(f"/api/admin/tabelas/{nome}", headers=ADMIN).status_code == 200
+    finally:
+        limiter.enabled = False
+        limiter.reset()

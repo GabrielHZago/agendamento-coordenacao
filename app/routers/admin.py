@@ -19,7 +19,7 @@ from ..config import ADMIN_KEY, LIMITE_ADMIN, UPLOAD_DIR
 from ..database import Base, get_db
 from ..models import Curso, Disciplina, Gestor, SenhaAluno, SenhaGestor
 from ..protecao import limiter
-from ..security import hash_senha, valida_senha
+from ..security import checa_bloqueio, hash_senha, registra_falha, valida_senha
 
 router = APIRouter(prefix="/api/admin", tags=["administração"])
 log = logging.getLogger("uvicorn.error")
@@ -28,8 +28,13 @@ log = logging.getLogger("uvicorn.error")
 def exige_admin(request: Request) -> None:
     if not ADMIN_KEY:
         raise HTTPException(404, "Não encontrado.")
+    # Contra chute de chave: 5 erros bloqueiam o endereço por 15 min (só os erros contam;
+    # quem tem a chave certa navega à vontade dentro do limite geral de LIMITE_ADMIN)
+    controle = f"admin:{request.client.host if request.client else '?'}"
+    checa_bloqueio(controle)
     chave = request.headers.get("x-chave-admin", "")
     if not hmac.compare_digest(chave.encode(), ADMIN_KEY.encode()):   # comparação em tempo constante
+        registra_falha(controle)
         raise HTTPException(403, "Chave de administração incorreta.")
 
 
@@ -119,7 +124,7 @@ def tabelas(request: Request, _: None = Depends(exige_admin), db: Session = Depe
 
 
 @router.get("/tabelas/{nome}")
-@limiter.limit("60/minute")
+@limiter.limit(LIMITE_ADMIN)
 def tabela(nome: str, request: Request, pagina: int = Query(1, ge=1, le=100000),
            _: None = Depends(exige_admin), db: Session = Depends(get_db)):
     t = _tabelas().get(nome)
@@ -143,7 +148,7 @@ class ApagarIn(BaseModel):
 
 
 @router.post("/tabelas/{nome}/apagar")
-@limiter.limit("60/minute")
+@limiter.limit(LIMITE_ADMIN)
 def apagar(nome: str, dados: ApagarIn, request: Request, _: None = Depends(exige_admin),
            db: Session = Depends(get_db)):
     """Apaga um registro. Se outro registro ainda depende dele, recusa e diz onde (não apaga em cascata)."""

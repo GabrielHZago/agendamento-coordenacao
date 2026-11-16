@@ -281,7 +281,9 @@ const ESTADO_BANCO = { tabela: null, pagina: 1 };
 
 /* Banco de dados: lista as tabelas e abre uma de cada vez, com opção de apagar registros */
 async function visualizadorBanco(el, cab) {
-  const tabelas = await api("GET", "/api/admin/tabelas", undefined, cab);
+  let tabelas;
+  try { tabelas = await api("GET", "/api/admin/tabelas", undefined, cab); }
+  catch (er) { el.innerHTML = `<div class="alert alert-danger">${esc(erroTexto(er))}</div>`; return; }
   if (!ESTADO_BANCO.tabela) ESTADO_BANCO.tabela = tabelas[0]?.nome;
   el.innerHTML = `<div class="row g-3">
     <div class="col-lg-3"><div class="painel"><div class="list-group list-group-flush">${tabelas.map(t => `
@@ -289,15 +291,29 @@ async function visualizadorBanco(el, cab) {
         <span class="text-truncate">${esc(t.nome)}</span><span class="badge text-bg-secondary rounded-pill">${t.linhas}</span></button>`).join("")}
     </div></div><p class="small text-body-secondary mt-2">As senhas não aparecem aqui.</p></div>
     <div class="col-lg-9" id="banco-tabela"></div></div>`;
+  // Trocar de tabela só recarrega o painel da direita (a lista só é refeita depois de apagar algo)
+  const recarrega = () => visualizadorBanco(el, cab);
   $$("[data-tab]", el).forEach(b => b.addEventListener("click", () => {
-    ESTADO_BANCO.tabela = b.dataset.tab; ESTADO_BANCO.pagina = 1; visualizadorBanco(el, cab);
+    ESTADO_BANCO.tabela = b.dataset.tab; ESTADO_BANCO.pagina = 1;
+    $$("[data-tab]", el).forEach(x => x.classList.toggle("active", x === b));
+    mostraTabela($("#banco-tabela", el), cab, recarrega);
   }));
-  if (ESTADO_BANCO.tabela) await mostraTabela($("#banco-tabela", el), cab, () => visualizadorBanco(el, cab));
+  if (ESTADO_BANCO.tabela) await mostraTabela($("#banco-tabela", el), cab, recarrega);
 }
+
+let PEDIDO_TABELA = 0;   // cliques rápidos: só a resposta do último clique é desenhada
 
 async function mostraTabela(el, cab, recarrega) {
   const { tabela, pagina } = ESTADO_BANCO;
-  const r = await api("GET", `/api/admin/tabelas/${encodeURIComponent(tabela)}?pagina=${pagina}`, undefined, cab);
+  const meu = ++PEDIDO_TABELA;
+  el.innerHTML = `<div class="painel p-3 placeholder-glow" aria-busy="true"><span class="placeholder col-4"></span><br><span class="placeholder col-8 placeholder-sm"></span></div>`;
+  let r;
+  try { r = await api("GET", `/api/admin/tabelas/${encodeURIComponent(tabela)}?pagina=${pagina}`, undefined, cab); }
+  catch (er) {
+    if (meu === PEDIDO_TABELA) el.innerHTML = `<div class="alert alert-danger">${esc(erroTexto(er))}</div>`;
+    return;
+  }
+  if (meu !== PEDIDO_TABELA) return;   // chegou atrasada: o usuário já pediu outra tabela
   const paginas = Math.max(1, Math.ceil(r.total / r.por_pagina));
   const celula = v => v === null ? `<span class="text-body-secondary">—</span>` : typeof v === "boolean" ? (v ? "sim" : "não") : esc(v);
   const chaveDe = linha => Object.fromEntries(r.chave.map(c => [c, linha[c]]));   // colunas da chave primária

@@ -33,7 +33,7 @@ API_DOCS = os.getenv("API_DOCS", "1" if DESENVOLVIMENTO else "0") == "1"
 
 # Tela escondida #admin (criar coordenador). Na VM o instalar.sh gera a chave; vazia = tela desligada.
 ADMIN_KEY = os.getenv("ADMIN_KEY", "dev" if DESENVOLVIMENTO else "")
-LIMITE_ADMIN = "10/minute"         # tentativas de chave por cliente
+LIMITE_ADMIN = "120/minute"        # navegação na tela #admin (chave errada: bloqueio após 5 erros)
 
 # "Esqueci a senha": link assinado enviado por e-mail (SMTP). Sem SMTP, o link vai só para o log.
 SMTP_HOST = os.getenv("SMTP_HOST", "")
