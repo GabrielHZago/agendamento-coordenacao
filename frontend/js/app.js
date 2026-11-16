@@ -30,11 +30,18 @@ $("#btn-ouvir").addEventListener("click", () => {
   b.setAttribute("aria-pressed", "true"); b.textContent = "Parar leitura";
   speechSynthesis.speak(fala);
 });
-// "Ir para o conteúdo": as telas usam o # da URL como rota, então o link só move o foco
+// "Ir para o conteúdo" (Alt+1): as telas usam o # da URL como rota, então o link não navega;
+// leva o foco ao primeiro campo da tela ou, se não houver, ao título, e destaca o ponto de chegada.
 $('a[href="#conteudo"]').addEventListener("click", e => {
   e.preventDefault();
-  $("#conteudo").focus();
-  $("#conteudo").scrollIntoView();
+  const main = $("#conteudo");
+  const alvo = $("input:not([type=hidden]):not([disabled]), select:not([disabled]), textarea", main)
+    || $("h1, h2", main) || main;
+  if (!alvo.matches("input, select, textarea")) alvo.setAttribute("tabindex", "-1");
+  alvo.focus({ preventScroll: true });
+  alvo.scrollIntoView({ behavior: "smooth", block: "center" });
+  alvo.classList.remove("pulo-destaque"); void alvo.offsetWidth; alvo.classList.add("pulo-destaque");
+  setTimeout(() => alvo.classList.remove("pulo-destaque"), 1600);
 });
 $("#btn-sair").addEventListener("click", async () => {
   await api("POST", "/api/logout").catch(() => {});

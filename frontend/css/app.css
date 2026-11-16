@@ -139,6 +139,10 @@ h2.subtitulo { font-size: 1.05rem; font-weight: 600; margin: 0 0 .6rem; }
 .form-check-input { width: 1.15em; height: 1.15em; }
 :focus-visible { outline: 3px solid var(--laranja); outline-offset: 2px; }
 #conteudo:focus { outline: none; }   /* recebe o foco a cada troca de tela só para o leitor de tela */
+/* Ponto de chegada do "Ir para o conteúdo": contorno laranja que some sozinho */
+@keyframes pulo { 0%, 60% { outline-color: var(--laranja); } 100% { outline-color: transparent; } }
+.pulo-destaque { outline: 3px solid var(--laranja); outline-offset: 4px; animation: pulo 1.6s ease-out forwards; border-radius: var(--bs-border-radius); }
+@media (prefers-reduced-motion: reduce) { .pulo-destaque { animation: none; } }
 
 /* Tabela vira lista no celular */
 @media (max-width: 767.98px) {
